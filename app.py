@@ -42,12 +42,45 @@ import prepare_mes_intraday as prep  # noqa: E402
 from chart_data import fetch_and_store, symbol_name  # noqa: E402
 import indicators  # noqa: E402
 
-st.set_page_config(page_title="MES 回放交易分析", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="MES 回放交易分析", layout="wide", initial_sidebar_state="collapsed")
 
 _rich_comment = components.declare_component(
     "rich_comment",
     path=str(ROOT / "components" / "rich_comment"),
 )
+
+
+_CSS = """
+<style>
+#MainMenu, footer, header[data-testid="stHeader"] { visibility: hidden; height: 0; }
+[data-testid="stSidebar"] { display: none; }
+.block-container { padding-top: 1.2rem; padding-bottom: 3rem; max-width: 1500px; }
+html, body, .stApp, [class*="css"] {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #202124;
+}
+.stButton > button {
+  border-radius: 8px;
+  border: 1px solid #dadce0;
+  background: #ffffff;
+  color: #1a73e8;
+  font-weight: 500;
+  transition: background .15s, box-shadow .15s;
+}
+.stButton > button:hover { background: #f1f3f4; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.stButton > button[kind="primary"] { background: #1a73e8; color: #fff; border: none; }
+.stButton > button[kind="primary"]:hover { background: #1765cc; }
+[data-testid="stVerticalBlockBorderWrapper"] {
+  background: #ffffff; border-radius: 12px; border: 1px solid #e8eaed;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+[data-testid="stExpander"] { border-radius: 8px; border: 1px solid #e8eaed; background: #ffffff; }
+[data-testid="stMetric"] {
+  background: #ffffff; border-radius: 10px; border: 1px solid #e8eaed; padding: 12px 14px;
+}
+h1, h2, h3 { color: #202124; letter-spacing: -0.01em; }
+</style>
+"""
 
 
 # ───────────────────────────────────────────────
@@ -389,89 +422,74 @@ def data_page():
 # ───────────────────────────────────────────────
 # 侧边栏
 # ───────────────────────────────────────────────
-def sidebar(trades: pd.DataFrame | None):
-    st.sidebar.title("⚙️ 控制面板")
-    st.sidebar.caption("页面导航在顶部")
+def _settings_ui():
+    st.session_state.chart_height = st.slider(
+        "图表高度", 300, 900, st.session_state.get("chart_height", 560), key="setting_height"
+    )
+    tz_options = {
+        "UTC": "UTC",
+        "America/New_York": "美东 ET",
+        "Asia/Shanghai": "北京时间 CST",
+    }
+    st.session_state.timezone = st.selectbox(
+        "时间轴时区",
+        list(tz_options),
+        index=list(tz_options).index(st.session_state.get("timezone", "UTC")),
+        format_func=lambda t: tz_options[t],
+        key="setting_tz",
+    )
 
-    # 交易列表（仅在交易页显示完整列表，总结页可隐藏）
-    if st.session_state.page == "detail" and trades is not None and not trades.empty:
-        st.sidebar.markdown("### 交易列表")
-        for _, row in trades.iterrows():
-            icon = "✅" if row["pnl_usd"] > 0 else "❌"
-            label = f"{icon} #{row['trade_id']} {row['direction'].upper()} ${row['pnl_usd']:.2f}"
-            if st.sidebar.button(label, key=f"trade_btn_{row['trade_id']}", use_container_width=True):
-                st.session_state.selected_trade_id = int(row["trade_id"])
-                st.rerun()
 
-    # 齿轮设置
-    st.sidebar.divider()
-    with st.sidebar.expander("⚙️ 设置", expanded=False):
-        st.session_state.chart_height = st.slider("图表高度", 300, 900, st.session_state.get("chart_height", 560), key="setting_height")
-        tz_options = {
-            "UTC": "UTC",
-            "America/New_York": "美东 ET",
-            "Asia/Shanghai": "北京时间 CST",
-        }
-        st.session_state.timezone = st.selectbox(
-            "时间轴时区",
-            list(tz_options),
-            index=list(tz_options).index(st.session_state.get("timezone", "UTC")),
-            format_func=lambda t: tz_options[t],
-            key="setting_tz",
+def _indicators_ui():
+    st.session_state.setdefault("ind_instances", [])
+    instances = st.session_state.ind_instances
+
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        new_type = st.selectbox(
+            "指标类型",
+            list(indicators.INDICATORS),
+            format_func=lambda t: indicators.INDICATORS[t]["label"],
+            key="ind_new_type",
         )
+    with c2:
+        if st.button("➕ 添加", use_container_width=True, key="ind_add_btn"):
+            used = {inst.get("color") for inst in instances}
+            instances.append({
+                "id": uuid.uuid4().hex,
+                "type": new_type,
+                "params": dict(indicators.INDICATORS[new_type]["params"]),
+                "color": indicators.next_color(used),
+            })
+            st.rerun()
 
-    # 指标插件
-    st.sidebar.divider()
-    with st.sidebar.expander("📊 指标", expanded=False):
-        st.session_state.setdefault("ind_instances", [])
-        instances = st.session_state.ind_instances
+    if not instances:
+        st.caption("尚未添加指标。")
 
-        c1, c2 = st.columns([3, 1])
-        with c1:
-            new_type = st.selectbox(
-                "指标类型",
-                list(indicators.INDICATORS),
-                format_func=lambda t: indicators.INDICATORS[t]["label"],
-                key="ind_new_type",
-            )
-        with c2:
-            if st.button("➕ 添加", use_container_width=True, key="ind_add_btn"):
-                used = {inst.get("color") for inst in instances}
-                instances.append({
-                    "id": uuid.uuid4().hex,
-                    "type": new_type,
-                    "params": dict(indicators.INDICATORS[new_type]["params"]),
-                    "color": indicators.next_color(used),
-                })
+    for inst in instances:
+        entry = indicators.INDICATORS.get(inst["type"])
+        if not entry:
+            continue
+        with st.container(border=True):
+            ch, ccol, cd = st.columns([4, 1, 1])
+            ch.markdown(f"**{entry['label']}**")
+            with ccol:
+                inst["color"] = st.color_picker(
+                    "颜色",
+                    value=inst.get("color", "#3b82f6"),
+                    key=f"indcolor_{inst['id']}",
+                    label_visibility="collapsed",
+                )
+            if cd.button("删除", key=f"ind_del_{inst['id']}", use_container_width=True):
+                st.session_state.ind_instances = [x for x in instances if x["id"] != inst["id"]]
                 st.rerun()
-
-        if not instances:
-            st.caption("尚未添加指标。")
-
-        for inst in instances:
-            entry = indicators.INDICATORS.get(inst["type"])
-            if not entry:
-                continue
-            with st.container(border=True):
-                ch, ccol, cd = st.columns([4, 1, 1])
-                ch.markdown(f"**{entry['label']}**")
-                with ccol:
-                    inst["color"] = st.color_picker(
-                        "颜色",
-                        value=inst.get("color", "#3b82f6"),
-                        key=f"indcolor_{inst['id']}",
-                        label_visibility="collapsed",
-                    )
-                if cd.button("删除", key=f"ind_del_{inst['id']}", use_container_width=True):
-                    st.session_state.ind_instances = [x for x in instances if x["id"] != inst["id"]]
-                    st.rerun()
-                params = {}
-                for pname, pval in inst["params"].items():
-                    if pname in ("length", "fast", "slow", "signal"):
-                        params[pname] = int(st.number_input(pname, value=int(pval), min_value=1, step=1, key=f"indparam_{inst['id']}_{pname}"))
-                    else:
-                        params[pname] = st.number_input(pname, value=float(pval), min_value=0.1, step=0.1, key=f"indparam_{inst['id']}_{pname}")
-                inst["params"] = params
+            params = {}
+            for pname, pval in inst["params"].items():
+                if pname in ("length", "fast", "slow", "signal"):
+                    params[pname] = int(st.number_input(pname, value=int(pval), min_value=1, step=1, key=f"indparam_{inst['id']}_{pname}"))
+                else:
+                    params[pname] = st.number_input(pname, value=float(pval), min_value=0.1, step=0.1, key=f"indparam_{inst['id']}_{pname}")
+            inst["params"] = params
 
 
 # ───────────────────────────────────────────────
@@ -537,15 +555,31 @@ def summary_page(trades: pd.DataFrame):
 # 交易详情页
 # ───────────────────────────────────────────────
 def detail_page(trades: pd.DataFrame):
-    selected_id = st.session_state.get("selected_trade_id", trades.iloc[0]["trade_id"])
-    trade = trades[trades["trade_id"] == selected_id].iloc[0]
+    ids = trades["trade_id"].tolist()
+    cur = int(st.session_state.get("selected_trade_id", ids[0]))
+    if cur not in ids:
+        cur = int(ids[0])
+    idx = ids.index(cur)
 
-    # 顶部导航
-    cols = st.columns([1, 6])
-    if cols[0].button("⬅️ 返回总结", use_container_width=True):
-        st.session_state.page = "summary"
+    sel, prev, nxt = st.columns([5, 1, 1])
+    with sel:
+        new_id = st.selectbox("选择交易", ids, index=idx, format_func=lambda t: f"#{t}")
+    with prev:
+        if st.button("◀ 上一笔", use_container_width=True, disabled=(idx == 0)):
+            st.session_state.selected_trade_id = int(ids[idx - 1])
+            st.rerun()
+    with nxt:
+        if st.button("下一笔 ▶", use_container_width=True, disabled=(idx >= len(ids) - 1)):
+            st.session_state.selected_trade_id = int(ids[idx + 1])
+            st.rerun()
+
+    if int(new_id) != cur:
+        st.session_state.selected_trade_id = int(new_id)
         st.rerun()
-    cols[1].header(f"交易 #{selected_id} 详情")
+
+    selected_id = int(st.session_state.selected_trade_id)
+    trade = trades[trades["trade_id"] == selected_id].iloc[0]
+    st.header(f"交易 #{selected_id} 详情")
 
     # 加载全量 K 线（拖动即可查看更多，无需设置前后根数）
     df_5m = load_klines("5min")
@@ -654,6 +688,8 @@ def detail_page(trades: pd.DataFrame):
 # 主入口
 # ───────────────────────────────────────────────
 def main():
+    st.markdown(_CSS, unsafe_allow_html=True)
+
     # session state 默认值
     settings = load_settings()
     if "page" not in st.session_state:
@@ -667,20 +703,24 @@ def main():
     if "ind_instances" not in st.session_state:
         st.session_state.ind_instances = settings.get("ind_instances", [])
 
-    # 顶部导航
-    nav_cols = st.columns([1, 1, 1, 7])
-    for col, page, label in [
-        (nav_cols[0], "summary", "📊 总结"),
-        (nav_cols[1], "detail", "📈 交易"),
-        (nav_cols[2], "data", "🛠 数据"),
-    ]:
-        if col.button(label, use_container_width=True, type=("primary" if st.session_state.page == page else "secondary")):
-            st.session_state.page = page
-            st.rerun()
+    # 顶部应用栏
+    bar = st.columns([4, 1, 1, 1, 1, 1])
+    with bar[0]:
+        st.markdown("### 📈 复盘分析")
+    for i, (page, label) in enumerate([("summary", "总结"), ("detail", "交易"), ("data", "数据")]):
+        with bar[1 + i]:
+            if st.button(label, use_container_width=True, type="primary" if st.session_state.page == page else "secondary"):
+                st.session_state.page = page
+                st.rerun()
+    with bar[4]:
+        with st.popover("⚙️ 设置", use_container_width=True):
+            _settings_ui()
+    with bar[5]:
+        with st.popover("📊 指标", use_container_width=True):
+            _indicators_ui()
     st.divider()
 
     trades = load_trades() if TRADES_CSV.exists() else None
-    sidebar(trades)
 
     if st.session_state.page == "data":
         data_page()

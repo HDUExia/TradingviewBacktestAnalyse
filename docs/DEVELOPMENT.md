@@ -40,7 +40,7 @@ streamlit run app.py
 ## 3. 目录结构
 
 ```
-app.py                       # Streamlit 主入口（所有页面/侧边栏/状态）
+app.py                       # Streamlit 主入口（所有页面/状态 + 顶部应用栏 + 主题 CSS）
 chart_lwc.py                 # Lightweight Charts 渲染（K 线+指标+副图+交互）
 chart_data.py                # 与 QuantData 的桥接 + CSV 读写 + 缺口填充
 indicators.py                # 指标插件库（注册表 + 计算）
@@ -79,12 +79,19 @@ data/                        # 运行期数据（gitignore，不提交）
 
 ### app.py（UI）
 
-- `main()`：顶部导航（总结/交易/数据）、加载/保存设置、路由到各页面
-- `sidebar()`：交易列表、设置（图表高度/时区）、指标插件面板
+- 布局：**无侧边栏**，顶部应用栏 = 标题 + 导航按钮（总结/交易/数据）+ 「⚙️ 设置」「📊 指标」两个 `st.popover`。
+- `main()`：注入主题 CSS、加载/保存设置（`data/settings.json`）、路由到各页面
+- `_settings_ui()` / `_indicators_ui()`：设置和指标管理的弹出内容（放在 popover 里）
 - `summary_page()`：汇总指标 + 权益曲线/盈亏分布/时段胜率/MAE-MFE
-- `detail_page()`：单笔交易详情，加载全量 K 线 → 传指标 → 渲染三周期图 + 评论
+- `detail_page()`：顶部「选择交易」下拉 + 上一笔/下一笔，加载全量 K 线 → 传指标 → 渲染三周期图 + 评论
 - `data_page()`：上传交易/行情、手动拉取、一键分析（自动判定区间）
 - 评论：`load_comments` / `add_comment` / `_process_comment_segments`（base64 图片落盘）
+
+### 主题 / 样式
+
+- `.streamlit/config.toml`：Google 风格主题（主色 `#1a73e8`、浅色背景、无衬线字体）。
+- `app.py` 顶部 `_CSS`：隐藏 Streamlit 默认 header/footer/菜单和侧边栏，圆角按钮/卡片/metric、Material 风格按钮。
+- 修改 UI 样式只改 `_CSS` 或 `config.toml`，不要散落各处。
 
 ### chart_lwc.py（图表渲染）
 
