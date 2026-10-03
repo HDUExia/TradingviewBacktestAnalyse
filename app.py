@@ -65,8 +65,8 @@ def session_of_hour(h):
 
 
 @st.cache_data
-def load_klines(freq: str, start_dt: str, end_dt: str) -> pd.DataFrame:
-    """读取 data/csv_intraday/<freq>/ 下的行情 CSV，按时间窗口过滤。"""
+def load_klines(freq: str, start_dt: str | None = None, end_dt: str | None = None) -> pd.DataFrame:
+    """读取 data/csv_intraday/<freq>/ 下的行情 CSV，可选按时间窗口过滤。"""
     columns = ["symbol", "datetime", "open", "high", "low", "close", "volume"]
     freq_dir = CSV_DIR / freq
     if not freq_dir.exists():
@@ -84,7 +84,10 @@ def load_klines(freq: str, start_dt: str, end_dt: str) -> pd.DataFrame:
 
     df = pd.concat(frames, ignore_index=True)
     df = df[["symbol", "datetime", "open", "high", "low", "close", "volume"]]
-    df = df[(df["datetime"] >= start_dt) & (df["datetime"] <= end_dt)]
+    if start_dt is not None:
+        df = df[df["datetime"] >= start_dt]
+    if end_dt is not None:
+        df = df[df["datetime"] <= end_dt]
     return df.sort_values("datetime").reset_index(drop=True)
 
 
@@ -363,8 +366,17 @@ def sidebar(trades: pd.DataFrame | None):
     st.sidebar.divider()
     with st.sidebar.expander("⚙️ 设置", expanded=False):
         st.session_state.chart_height = st.slider("图表高度", 300, 900, 560, key="setting_height")
-        st.session_state.bars_before = st.slider("进场前 K 线数", 10, 200, 50, key="setting_before")
-        st.session_state.bars_after = st.slider("出场后 K 线数", 10, 200, 50, key="setting_after")
+        tz_options = {
+            "UTC": "UTC",
+            "America/New_York": "美东 ET",
+            "Asia/Shanghai": "北京时间 CST",
+        }
+        st.session_state.timezone = st.selectbox(
+            "时间轴时区",
+            list(tz_options),
+            format_func=lambda t: tz_options[t],
+            key="setting_tz",
+        )
 
 
 # ───────────────────────────────────────────────
@@ -440,15 +452,10 @@ def detail_page(trades: pd.DataFrame):
         st.rerun()
     cols[1].header(f"交易 #{selected_id} 详情")
 
-    # 计算窗口
-    df_5m_for_window = load_klines(
-        "5min",
-        (trade["entry_time"] - pd.Timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S"),
-        (trade["exit_time"] + pd.Timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S"),
-    )
-
-    if df_5m_for_window.empty:
-        st.warning("⚠️ 该交易时间窗口没有本地 K 线数据。")
+    # 加载全量 K 线（拖动即可查看更多，无需设置前后根数）
+    df_5m = load_klines("5min")
+    if df_5m.empty:
+        st.warning("⚠️ 该品种没有本地 K 线数据。")
         st.markdown("到「🛠 数据」→「🚀 一键分析」或用 QuantData 从 TradingView 拉取（历史区间走回放模式）：")
         st.code(
             f"python3 scripts/fetch_tv_data.py --symbol MES1! --timeframe 5m "
@@ -460,18 +467,9 @@ def detail_page(trades: pd.DataFrame):
         )
         return
 
-    entry_idx = (df_5m_for_window["datetime"] <= trade["entry_time"]).sum() - 1
-    exit_idx = (df_5m_for_window["datetime"] <= trade["exit_time"]).sum() - 1
-    start_idx = max(0, entry_idx - st.session_state.bars_before)
-    end_idx = min(len(df_5m_for_window) - 1, exit_idx + st.session_state.bars_after)
-    window_start = df_5m_for_window.iloc[start_idx]["datetime"]
-    window_end = df_5m_for_window.iloc[end_idx]["datetime"]
-    start_str = window_start.strftime("%Y-%m-%d %H:%M:%S")
-    end_str = window_end.strftime("%Y-%m-%d %H:%M:%S")
-
     # 数据匹配警告
-    entry_bar = df_5m_for_window.iloc[(df_5m_for_window["datetime"] - trade["entry_time"]).abs().argsort()[:1]]
-    exit_bar = df_5m_for_window.iloc[(df_5m_for_window["datetime"] - trade["exit_time"]).abs().argsort()[:1]]
+    entry_bar = df_5m.iloc[(df_5m["datetime"] - trade["entry_time"]).abs().argsort()[:1]]
+    exit_bar = df_5m.iloc[(df_5m["datetime"] - trade["exit_time"]).abs().argsort()[:1]]
     entry_in_range = entry_bar["low"].values[0] <= trade["entry_price"] <= entry_bar["high"].values[0]
     exit_in_range = exit_bar["low"].values[0] <= trade["exit_price"] <= exit_bar["high"].values[0]
     if not (entry_in_range and exit_in_range):
@@ -479,22 +477,21 @@ def detail_page(trades: pd.DataFrame):
 
     # K 线图
     st.subheader("K 线图")
-    df_5m = load_klines("5min", start_str, end_str)
-    df_15m = load_klines("15min", start_str, end_str)
-    df_60m = load_klines("60min", start_str, end_str)
+    st.caption("拖动图表即可查看进场前 / 出场后的 K 线，滚轮缩放。")
+    df_15m = load_klines("15min")
+    df_60m = load_klines("60min")
 
     chart_h = int(st.session_state.chart_height * 0.75)
+    tz = st.session_state.get("timezone", "UTC")
 
-    html_5m = render_chart(df_5m, trade, "5 分钟图", chart_h)
+    html_5m = render_chart(df_5m, trade, "5 分钟图", chart_h, tz)
     components.html(html_5m, height=chart_h, scrolling=False)
 
-    html_15m = render_chart(df_15m, trade, "15 分钟图", chart_h)
+    html_15m = render_chart(df_15m, trade, "15 分钟图", chart_h, tz)
     components.html(html_15m, height=chart_h, scrolling=False)
 
-    html_60m = render_chart(df_60m, trade, "60 分钟图", chart_h)
+    html_60m = render_chart(df_60m, trade, "60 分钟图", chart_h, tz)
     components.html(html_60m, height=chart_h, scrolling=False)
-
-    st.caption(f"时间窗口：{window_start} ~ {window_end}")
 
     # 交易数据
     st.divider()
@@ -564,10 +561,8 @@ def main():
         st.session_state.selected_trade_id = 1
     if "chart_height" not in st.session_state:
         st.session_state.chart_height = 560
-    if "bars_before" not in st.session_state:
-        st.session_state.bars_before = 50
-    if "bars_after" not in st.session_state:
-        st.session_state.bars_after = 50
+    if "timezone" not in st.session_state:
+        st.session_state.timezone = "UTC"
 
     trades = load_trades() if TRADES_CSV.exists() else None
     sidebar(trades)

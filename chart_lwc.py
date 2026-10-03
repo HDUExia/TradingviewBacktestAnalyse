@@ -1,9 +1,14 @@
-"""
-使用 TradingView Lightweight Charts 渲染接近原生 TV 体验的 K 线图。
-通过 streamlit.components.v1.html 嵌入。
-"""
+"""使用 TradingView Lightweight Charts 渲染 K 线图，通过 streamlit 嵌入。"""
 import json
+from datetime import timezone
+
 import pandas as pd
+
+TZ_LABELS = {
+    "UTC": "UTC",
+    "America/New_York": "美东 ET",
+    "Asia/Shanghai": "北京时间 CST",
+}
 
 
 def render_chart(
@@ -11,27 +16,39 @@ def render_chart(
     trade: pd.Series,
     title: str,
     height: int = 560,
+    tz: str = "UTC",
 ) -> str:
-    """生成包含 Lightweight Charts 的 HTML 字符串。"""
-
+    """生成包含 Lightweight Charts 的 HTML。df 传入全量数据，图表自动居中到这笔交易。"""
     df = df.copy().sort_values("datetime").reset_index(drop=True)
-    df["time_str"] = df["datetime"].dt.strftime("%Y-%m-%dT%H:%M:%S")
 
-    candles = df[["time_str", "open", "high", "low", "close"]].rename(
-        columns={"time_str": "time"}
-    ).to_dict("records")
+    def to_js_time(dt) -> int:
+        dt = pd.to_datetime(dt)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return int(dt.timestamp())
 
-    volumes = []
-    for _, row in df.iterrows():
-        color = "#26a69a" if row["close"] >= row["open"] else "#ef5350"
-        volumes.append({
-            "time": row["time_str"],
-            "value": float(row["volume"]),
-            "color": color,
-        })
+    candles_js = [
+        {
+            "time": to_js_time(r["datetime"]),
+            "open": r["open"],
+            "high": r["high"],
+            "low": r["low"],
+            "close": r["close"],
+        }
+        for _, r in df.iterrows()
+    ]
 
-    entry_time = trade["entry_time"].strftime("%Y-%m-%dT%H:%M:%S")
-    exit_time = trade["exit_time"].strftime("%Y-%m-%dT%H:%M:%S")
+    volumes_js = [
+        {
+            "time": to_js_time(r["datetime"]),
+            "value": float(r["volume"]),
+            "color": "#26a69a" if r["close"] >= r["open"] else "#ef5350",
+        }
+        for _, r in df.iterrows()
+    ]
+
+    entry_ts = to_js_time(trade["entry_time"])
+    exit_ts = to_js_time(trade["exit_time"])
     direction = trade["direction"]
 
     if direction == "long":
@@ -41,9 +58,9 @@ def render_chart(
         entry_color, entry_shape, entry_pos = "#ef4444", "arrowDown", "belowBar"
         exit_color, exit_shape, exit_pos = "#22c55e", "arrowUp", "aboveBar"
 
-    markers = [
+    markers_js = [
         {
-            "time": entry_time,
+            "time": entry_ts,
             "position": entry_pos,
             "color": entry_color,
             "shape": entry_shape,
@@ -51,7 +68,7 @@ def render_chart(
             "size": 2,
         },
         {
-            "time": exit_time,
+            "time": exit_ts,
             "position": exit_pos,
             "color": exit_color,
             "shape": exit_shape,
@@ -60,29 +77,7 @@ def render_chart(
         },
     ]
 
-    # 把 Python 的 datetime 字符串转成 JS 时间戳（毫秒），Lightweight Charts 更稳定
-    def to_js_time(dt_str):
-        dt = pd.to_datetime(dt_str)
-        return int(dt.timestamp())
-
-    candles_js = [
-        {
-            "time": to_js_time(c["time"]),
-            "open": c["open"],
-            "high": c["high"],
-            "low": c["low"],
-            "close": c["close"],
-        }
-        for c in candles
-    ]
-    volumes_js = [
-        {"time": to_js_time(v["time"]), "value": v["value"], "color": v["color"]}
-        for v in volumes
-    ]
-    markers_js = [
-        {**m, "time": to_js_time(m["time"])}
-        for m in markers
-    ]
+    tz_label = TZ_LABELS.get(tz, tz)
 
     html = f"""
 <!DOCTYPE html>
@@ -99,12 +94,24 @@ def render_chart(
 </head>
 <body>
   <div id="container">
-    <div id="title">{title}</div>
+    <div id="title">{title} · 时区 {tz_label}</div>
     <div id="legend">O — H — L — C — | Vol —</div>
   </div>
   <script>
     const container = document.getElementById('container');
     const legend = document.getElementById('legend');
+    const TZ = {json.dumps(tz)};
+    const ENTRY_TS = {entry_ts};
+    const EXIT_TS = {exit_ts};
+
+    function fmtTZ(seconds) {{
+      const d = new Date(seconds * 1000);
+      return new Intl.DateTimeFormat('en-GB', {{
+        timeZone: TZ,
+        month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+      }}).format(d);
+    }}
 
     const chart = LightweightCharts.createChart(container, {{
       width: container.clientWidth,
@@ -113,6 +120,9 @@ def render_chart(
         background: {{ type: 'solid', color: '#131722' }},
         textColor: '#d1d4dc',
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      }},
+      localization: {{
+        locale: 'en-GB',
       }},
       grid: {{
         vertLines: {{ color: '#1e222d' }},
@@ -139,6 +149,7 @@ def render_chart(
         barSpacing: 8,
         fixLeftEdge: false,
         fixRightEdge: false,
+        tickMarkFormatter: (time) => fmtTZ(time),
       }},
       handleScroll: {{
         vertTouchDrag: false,
@@ -170,8 +181,7 @@ def render_chart(
       priceScaleId: '',
       priceFormat: {{ type: 'volume' }},
     }});
-    const volumes = {json.dumps(volumes_js)};
-    volSeries.setData(volumes);
+    volSeries.setData({json.dumps(volumes_js)});
     volSeries.priceScale().applyOptions({{
       scaleMargins: {{ top: 0.82, bottom: 0 }},
       alignLabels: false,
@@ -191,12 +201,11 @@ def render_chart(
         const c = data.close.toFixed(2);
         const v = volData ? Math.round(volData.value).toLocaleString() : '-';
         const color = data.close >= data.open ? '#26a69a' : '#ef5350';
-        legend.innerHTML = `<span style="color:${{color}}">O ${{o}} &nbsp;H ${{h}} &nbsp;L ${{l}} &nbsp;C ${{c}}</span> &nbsp;| &nbsp;Vol ${{v}}`;
+        legend.innerHTML = `<span style="color:${{color}}">O ${{o}} H ${{h}} L ${{l}} C ${{c}}</span> | Vol ${{v}} | ${{fmtTZ(param.time)}}`;
       }}
     }});
 
-    // ==================== 自定义交互 ====================
-
+    // ==================== 拖动平移（向左拖看更早，向右拖看更晚） ====================
     let isDragging = false;
     let startX = 0, startY = 0, lastX = 0, lastY = 0;
     let dragMode = null;
@@ -245,7 +254,7 @@ def render_chart(
         bottom = Math.max(0.01, Math.min(0.98 - top, bottom + shift));
         ps.applyOptions({{ autoScale: false, scaleMargins: {{ top, bottom }} }});
       }} else if (dragMode === 'time') {{
-        chart.timeScale().scrollToPosition(chart.timeScale().scrollPosition() - dx / 3, false);
+        chart.timeScale().scrollToPosition(chart.timeScale().scrollPosition() + dx / 3, false);
       }}
     }});
 
@@ -287,21 +296,30 @@ def render_chart(
       }}
     }}, {{ passive: false }});
 
-    // 自适应窗口大小
     const resizeObserver = new ResizeObserver(() => {{
       chart.applyOptions({{ width: container.clientWidth }});
     }});
     resizeObserver.observe(container);
 
-    // 初始显示全部数据，用 setVisibleLogicalRange 确保不会出现单根 K 线
+    function findIndex(ts) {{
+      for (let i = 0; i < candles.length; i++) {{
+        if (candles[i].time >= ts) return i;
+      }}
+      return candles.length - 1;
+    }}
+
     function initialFit() {{
       if (candles.length > 1) {{
-        chart.timeScale().setVisibleLogicalRange({{ from: 0, to: candles.length - 1 }});
+        const entryIdx = findIndex(ENTRY_TS);
+        const exitIdx = findIndex(EXIT_TS);
+        const pad = 60;
+        const from = Math.max(0, entryIdx - pad);
+        const to = Math.min(candles.length - 1, exitIdx + pad);
+        chart.timeScale().setVisibleLogicalRange({{ from, to }});
       }}
       chart.priceScale('right').applyOptions({{ autoScale: true }});
     }}
 
-    // 立即执行 + 延迟再执行一次，防止 Streamlit tab 初始宽度为 0
     initialFit();
     setTimeout(initialFit, 200);
     setTimeout(initialFit, 500);
