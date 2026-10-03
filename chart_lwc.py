@@ -52,11 +52,11 @@ def render_chart(
     direction = trade["direction"]
 
     if direction == "long":
-        entry_color, entry_shape, entry_pos = "#22c55e", "arrowUp", "aboveBar"
-        exit_color, exit_shape, exit_pos = "#ef4444", "arrowDown", "belowBar"
+        entry_color, entry_shape, entry_pos = "#22c55e", "arrowUp", "belowBar"
+        exit_color, exit_shape, exit_pos = "#ef4444", "arrowDown", "aboveBar"
     else:
-        entry_color, entry_shape, entry_pos = "#ef4444", "arrowDown", "belowBar"
-        exit_color, exit_shape, exit_pos = "#22c55e", "arrowUp", "aboveBar"
+        entry_color, entry_shape, entry_pos = "#ef4444", "arrowDown", "aboveBar"
+        exit_color, exit_shape, exit_pos = "#22c55e", "arrowUp", "belowBar"
 
     markers_js = [
         {
