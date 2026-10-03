@@ -44,6 +44,7 @@ app.py                       # Streamlit 主入口（所有页面/状态 + 顶�
 chart_lwc.py                 # Lightweight Charts 渲染（K 线+指标+副图+交互）
 chart_data.py                # 与 QuantData 的桥接 + CSV 读写 + 缺口填充
 indicators.py                # 指标插件库（注册表 + 计算）
+markdown_io.py               # Markdown 报告导入导出（原始交易数据 + 评论）
 components/rich_comment/     # 评论富文本组件（自定义 Streamlit 组件）
 scripts/
   generate_sample_data.py    # 生成示例行情/交易
@@ -74,6 +75,14 @@ data/                        # 运行期数据（gitignore，不提交）
 - `comments.json`：评论（segments 结构，文字段 + 图片段）
 - `uploads/`：评论里粘贴的图片
 - `settings.json`：UI 设置（指标实例、时区、图表高度），跨刷新持久化
+
+### Markdown 导入导出
+
+- 导出：`markdown_io.export_markdown(trades_csv, comments, root)`，在总结页提供下载。
+- 导入：`markdown_io.import_markdown(text, root)`，在数据页「回放交易」提供 `.md` 上传。
+- Markdown 只包含**原始交易数据 + 评论**；K 线数据不放进 Markdown（体积大，由 CSV/TV 重新生成）。
+- 格式：交易数据用带 `<!-- TBA_TRADES_BEGIN/END -->` 标记的 ```csv 代码块；评论用
+  `<!-- TBA_COMMENT_BEGIN {...} -->` 包裹，图片以 `![图片](相对路径)` 引用。
 
 ## 5. 关键组件
 

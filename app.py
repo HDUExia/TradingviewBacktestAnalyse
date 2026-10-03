@@ -12,6 +12,7 @@ MES 回放交易分析面板 v3
 from __future__ import annotations
 
 import base64
+import io
 import json
 import sys
 import uuid
@@ -41,6 +42,7 @@ import parse_replay_trades  # noqa: E402
 import prepare_mes_intraday as prep  # noqa: E402
 from chart_data import fetch_and_store, symbol_name  # noqa: E402
 import indicators  # noqa: E402
+import markdown_io  # noqa: E402
 
 st.set_page_config(page_title="MES 回放交易分析", layout="wide", initial_sidebar_state="expanded")
 
@@ -344,6 +346,27 @@ def data_page():
             (st.success if kind == "success" else st.error)(text)
         st.caption("解析后会保存到 `data/replay_trades_parsed.csv`，刷新页面不会丢失。")
 
+        st.divider()
+        st.subheader("或者导入 Markdown 报告")
+        st.caption("报告会反解析成「原始交易数据 + 评论」（K 线数据需单独准备）。")
+        md_file = st.file_uploader("选择 .md 文件", type=["md", "markdown"], key="md_upload")
+        if md_file is not None and st.button("导入报告", key="btn_md_import"):
+            try:
+                csv_text, comments = markdown_io.import_markdown(md_file.getvalue().decode("utf-8"), ROOT)
+                if not csv_text:
+                    st.error("未在文档中找到原始交易数据（缺少 TBA_TRADES 标记）。")
+                else:
+                    TRADES_CSV.parent.mkdir(parents=True, exist_ok=True)
+                    TRADES_CSV.write_text(csv_text, encoding="utf-8")
+                    COMMENTS_JSON.parent.mkdir(parents=True, exist_ok=True)
+                    COMMENTS_JSON.write_text(json.dumps(comments, ensure_ascii=False, indent=2), encoding="utf-8")
+                    st.cache_data.clear()
+                    st.session_state.pop("trades_parse_msg", None)
+                    n_trades = len(pd.read_csv(io.StringIO(csv_text)))
+                    st.success(f"导入成功：{n_trades} 笔交易，{len(comments)} 条评论。")
+            except Exception as exc:
+                st.error(f"导入失败：{exc}")
+
     with tab_klines:
         st.subheader("上传 1 分钟行情 CSV")
         st.caption(
@@ -541,6 +564,18 @@ def summary_page(trades: pd.DataFrame):
     display_df = trades[["trade_id", "direction", "entry_time", "exit_time", "pnl_usd", "return_pct", "duration_minutes", "mfe_usd", "mae_usd", "session"]].copy()
     display_df["结果"] = display_df["pnl_usd"].apply(lambda x: "✅ 盈" if x > 0 else "❌ 亏")
     st.dataframe(display_df, use_container_width=True)
+
+    st.divider()
+    st.subheader("📦 导出 Markdown 报告")
+    st.caption("报告包含原始交易数据 + 评论（K 线数据不包含，需单独保留）。")
+    report = markdown_io.export_markdown(TRADES_CSV, load_comments(), ROOT)
+    st.download_button(
+        "下载 report.md",
+        data=report,
+        file_name="tba_report.md",
+        mime="text/markdown",
+        use_container_width=True,
+    )
 
 
 # ───────────────────────────────────────────────
