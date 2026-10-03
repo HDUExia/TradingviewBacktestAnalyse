@@ -32,6 +32,7 @@ TRADES_CSV = ROOT / "data" / "replay_trades_parsed.csv"
 CSV_DIR = ROOT / "data" / "csv_intraday"
 COMMENTS_JSON = ROOT / "data" / "comments.json"
 UPLOADS_DIR = ROOT / "data" / "uploads"
+SETTINGS_JSON = ROOT / "data" / "settings.json"
 
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -206,6 +207,25 @@ def add_comment(trade_id: int, segments: list[dict]) -> None:
     COMMENTS_JSON.write_text(json.dumps(comments, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def load_settings() -> dict:
+    if not SETTINGS_JSON.exists():
+        return {}
+    try:
+        return json.loads(SETTINGS_JSON.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_settings() -> None:
+    SETTINGS_JSON.parent.mkdir(parents=True, exist_ok=True)
+    data = {
+        "ind_instances": st.session_state.get("ind_instances", []),
+        "timezone": st.session_state.get("timezone", "UTC"),
+        "chart_height": st.session_state.get("chart_height", 560),
+    }
+    SETTINGS_JSON.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def prepare_intraday(input_path: Path, symbol: str, csv_dir: Path) -> None:
     """1 分钟 CSV → 5/15/60 分钟 CSV。"""
     df_1m = prep.load_1min(input_path, symbol)
@@ -370,22 +390,8 @@ def data_page():
 # 侧边栏
 # ───────────────────────────────────────────────
 def sidebar(trades: pd.DataFrame | None):
-    st.sidebar.title("📈 MES 复盘")
-
-    # 页面导航
-    st.sidebar.markdown("### 页面")
-    nav_cols = st.sidebar.columns(3)
-    if nav_cols[0].button("📊 总结", use_container_width=True, type=("primary" if st.session_state.page == "summary" else "secondary")):
-        st.session_state.page = "summary"
-        st.rerun()
-    if nav_cols[1].button("📈 交易", use_container_width=True, type=("primary" if st.session_state.page == "detail" else "secondary")):
-        st.session_state.page = "detail"
-        st.rerun()
-    if nav_cols[2].button("🛠 数据", use_container_width=True, type=("primary" if st.session_state.page == "data" else "secondary")):
-        st.session_state.page = "data"
-        st.rerun()
-
-    st.sidebar.divider()
+    st.sidebar.title("⚙️ 控制面板")
+    st.sidebar.caption("页面导航在顶部")
 
     # 交易列表（仅在交易页显示完整列表，总结页可隐藏）
     if st.session_state.page == "detail" and trades is not None and not trades.empty:
@@ -400,7 +406,7 @@ def sidebar(trades: pd.DataFrame | None):
     # 齿轮设置
     st.sidebar.divider()
     with st.sidebar.expander("⚙️ 设置", expanded=False):
-        st.session_state.chart_height = st.slider("图表高度", 300, 900, 560, key="setting_height")
+        st.session_state.chart_height = st.slider("图表高度", 300, 900, st.session_state.get("chart_height", 560), key="setting_height")
         tz_options = {
             "UTC": "UTC",
             "America/New_York": "美东 ET",
@@ -409,6 +415,7 @@ def sidebar(trades: pd.DataFrame | None):
         st.session_state.timezone = st.selectbox(
             "时间轴时区",
             list(tz_options),
+            index=list(tz_options).index(st.session_state.get("timezone", "UTC")),
             format_func=lambda t: tz_options[t],
             key="setting_tz",
         )
@@ -648,14 +655,29 @@ def detail_page(trades: pd.DataFrame):
 # ───────────────────────────────────────────────
 def main():
     # session state 默认值
+    settings = load_settings()
     if "page" not in st.session_state:
         st.session_state.page = "summary"
     if "selected_trade_id" not in st.session_state:
         st.session_state.selected_trade_id = 1
     if "chart_height" not in st.session_state:
-        st.session_state.chart_height = 560
+        st.session_state.chart_height = settings.get("chart_height", 560)
     if "timezone" not in st.session_state:
-        st.session_state.timezone = "UTC"
+        st.session_state.timezone = settings.get("timezone", "UTC")
+    if "ind_instances" not in st.session_state:
+        st.session_state.ind_instances = settings.get("ind_instances", [])
+
+    # 顶部导航
+    nav_cols = st.columns([1, 1, 1, 7])
+    for col, page, label in [
+        (nav_cols[0], "summary", "📊 总结"),
+        (nav_cols[1], "detail", "📈 交易"),
+        (nav_cols[2], "data", "🛠 数据"),
+    ]:
+        if col.button(label, use_container_width=True, type=("primary" if st.session_state.page == page else "secondary")):
+            st.session_state.page = page
+            st.rerun()
+    st.divider()
 
     trades = load_trades() if TRADES_CSV.exists() else None
     sidebar(trades)
@@ -674,6 +696,8 @@ def main():
             data_page()
         else:
             summary_page(trades)
+
+    save_settings()
 
 
 if __name__ == "__main__":
