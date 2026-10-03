@@ -205,7 +205,7 @@ def render_chart(
       }}
     }});
 
-    // ==================== 拖动平移（向左拖看更早，向右拖看更晚） ====================
+    // ==================== 拖动平移（向左拖看出场后的更晚，向右拖看进场前的更早） ====================
     let isDragging = false;
     let startX = 0, startY = 0, lastX = 0, lastY = 0;
     let dragMode = null;
@@ -254,7 +254,7 @@ def render_chart(
         bottom = Math.max(0.01, Math.min(0.98 - top, bottom + shift));
         ps.applyOptions({{ autoScale: false, scaleMargins: {{ top, bottom }} }});
       }} else if (dragMode === 'time') {{
-        chart.timeScale().scrollToPosition(chart.timeScale().scrollPosition() + dx / 3, false);
+        chart.timeScale().scrollToPosition(chart.timeScale().scrollPosition() - dx / 3, false);
       }}
     }});
 

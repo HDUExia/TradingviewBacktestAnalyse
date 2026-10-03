@@ -477,7 +477,7 @@ def detail_page(trades: pd.DataFrame):
 
     # K 线图
     st.subheader("K 线图")
-    st.caption("拖动图表即可查看进场前 / 出场后的 K 线，滚轮缩放。")
+    st.caption("拖动图表查看 K 线：向左拖看出场后，向右拖看进场前；滚轮缩放。")
     df_15m = load_klines("15min")
     df_60m = load_klines("60min")
 
