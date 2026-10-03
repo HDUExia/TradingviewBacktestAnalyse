@@ -57,7 +57,9 @@ _CSS = """
 #MainMenu, footer, header[data-testid="stHeader"] { visibility: hidden; height: 0; }
 .block-container { padding-top: 1.2rem; padding-bottom: 3rem; max-width: 1500px; }
 .stButton > button {
-  border-radius: 8px;
+  width: 100%;
+  justify-content: center;
+  border-radius: 6px;
   border: 1px solid #30363d;
   background: #1f2430;
   color: #e6e6e6;
@@ -67,6 +69,8 @@ _CSS = """
 .stButton > button:hover { background: #2a303c; box-shadow: 0 1px 2px rgba(0,0,0,.4); }
 .stButton > button[kind="primary"] { background: #4c8bf5; color: #fff; border: none; }
 .stButton > button[kind="primary"]:hover { background: #3a79e0; }
+[data-testid="stColorPicker"] input { display: none !important; }
+[data-testid="stColorPicker"] { min-width: 0; }
 [data-testid="stVerticalBlockBorderWrapper"] {
   background: #161b26; border-radius: 12px; border: 1px solid #262d3a;
 }
@@ -469,7 +473,7 @@ def _indicators_ui():
     st.session_state.setdefault("ind_instances", [])
     instances = st.session_state.ind_instances
 
-    c1, c2 = st.columns([3, 1])
+    c1, c2 = st.columns([5, 2])
     with c1:
         new_type = st.selectbox(
             "指标类型",
@@ -496,7 +500,7 @@ def _indicators_ui():
         if not entry:
             continue
         with st.container(border=True):
-            ch, ccol, cd = st.columns([4, 1, 1])
+            ch, ccol, cd = st.columns([4, 1, 2])
             ch.markdown(f"**{entry['label']}**")
             with ccol:
                 inst["color"] = st.color_picker(
