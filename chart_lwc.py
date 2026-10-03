@@ -296,6 +296,18 @@ def render_chart(
       }}
     }}, {{ passive: false }});
 
+    // 双击右侧价位表：把价格轴的上下拉伸/缩放恢复默认（自动缩放）
+    container.addEventListener('dblclick', (e) => {{
+      const rect = container.getBoundingClientRect();
+      const localX = e.clientX - rect.left;
+      if (isPriceScaleArea(localX)) {{
+        chart.priceScale('right').applyOptions({{
+          autoScale: true,
+          scaleMargins: {{ top: 0.08, bottom: 0.18 }},
+        }});
+      }}
+    }});
+
     const resizeObserver = new ResizeObserver(() => {{
       chart.applyOptions({{ width: container.clientWidth }});
     }});
