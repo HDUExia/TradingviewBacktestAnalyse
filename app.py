@@ -11,6 +11,7 @@ MES 回放交易分析面板 v3
 """
 from __future__ import annotations
 
+import base64
 import json
 import sys
 import uuid
@@ -40,6 +41,11 @@ import prepare_mes_intraday as prep  # noqa: E402
 from chart_data import fetch_and_store, symbol_name  # noqa: E402
 
 st.set_page_config(page_title="MES 回放交易分析", layout="wide", initial_sidebar_state="expanded")
+
+_rich_comment = components.declare_component(
+    "rich_comment",
+    path=str(ROOT / "components" / "rich_comment"),
+)
 
 
 # ───────────────────────────────────────────────
@@ -156,14 +162,42 @@ def load_comments() -> list[dict]:
         return []
 
 
-def add_comment(trade_id: int, text: str, image_path: str | None = None) -> None:
+def _process_comment_segments(segments: list[dict], trade_id: int) -> list[dict]:
+    """把编辑器返回的 base64 图片落盘、替换为本地路径，并合并相邻文本段。"""
+    out = []
+    for seg in segments:
+        if seg.get("type") == "image":
+            src = seg.get("src", "")
+            if src.startswith("data:"):
+                meta, b64 = src.split(",", 1)
+                ext = meta.split(";")[0].split("/")[-1] or "png"
+                if ext not in ("png", "jpg", "jpeg", "gif", "webp"):
+                    ext = "png"
+                UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+                dest = UPLOADS_DIR / f"c{trade_id}_{uuid.uuid4().hex}.{ext}"
+                dest.write_bytes(base64.b64decode(b64))
+                out.append({"type": "image", "path": str(dest)})
+            else:
+                out.append({"type": "image", "path": src})
+        else:
+            out.append({"type": "text", "text": seg.get("text", "")})
+
+    merged = []
+    for seg in out:
+        if merged and merged[-1]["type"] == "text" and seg["type"] == "text":
+            merged[-1]["text"] += seg["text"]
+        else:
+            merged.append(seg)
+    return merged
+
+
+def add_comment(trade_id: int, segments: list[dict]) -> None:
     comments = load_comments()
     comments.append(
         {
             "id": uuid.uuid4().hex,
             "trade_id": trade_id,
-            "text": text,
-            "image_path": image_path,
+            "segments": segments,
             "created_at": datetime.now().isoformat(timespec="seconds"),
         }
     )
@@ -526,28 +560,33 @@ def detail_page(trades: pd.DataFrame):
     for c in reversed(trade_comments):
         with st.container(border=True):
             st.markdown(f"*{c.get('created_at', '')}*")
-            st.write(c.get("text", ""))
-            img_path = c.get("image_path")
-            if img_path and Path(img_path).exists():
-                st.image(str(img_path), width=440)
+            if "segments" in c:
+                for seg in c["segments"]:
+                    if seg.get("type") == "image":
+                        p = Path(seg.get("path", ""))
+                        if p.exists():
+                            st.image(str(p), width=460)
+                    else:
+                        st.markdown(seg.get("text", ""))
+            else:
+                st.write(c.get("text", ""))
+                img_path = c.get("image_path")
+                if img_path and Path(img_path).exists():
+                    st.image(str(img_path), width=460)
 
-    with st.form("comment_form"):
-        text = st.text_area("写评论…", key="comment_text", placeholder="例如：这里进场偏早，应该等二次确认…")
-        img_file = st.file_uploader("贴图（可选）", type=["png", "jpg", "jpeg", "gif", "webp"], key="comment_img")
-        submitted = st.form_submit_button("发布评论")
-    if submitted:
-        if not text.strip():
-            st.warning("评论内容不能为空。")
-        else:
-            image_path = None
-            if img_file is not None:
-                UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-                ext = Path(img_file.name).suffix or ".png"
-                dest = UPLOADS_DIR / f"trade{selected_id}_{uuid.uuid4().hex}{ext}"
-                dest.write_bytes(img_file.getvalue())
-                image_path = str(dest)
-            add_comment(int(selected_id), text.strip(), image_path)
-            st.rerun()
+    # 富文本评论编辑器（支持粘贴图片、图文混排）
+    raw = _rich_comment(key=f"rich_comment_{selected_id}", default=None)
+    last_key = f"last_rich_comment_{selected_id}"
+    if raw and st.session_state.get(last_key) != raw:
+        st.session_state[last_key] = raw
+        try:
+            segs = json.loads(raw)
+            processed = _process_comment_segments(segs, int(selected_id))
+            if processed:
+                add_comment(int(selected_id), processed)
+        except Exception as exc:
+            st.error(f"发布评论失败：{exc}")
+        st.rerun()
 
 
 # ───────────────────────────────────────────────
