@@ -53,7 +53,6 @@
           } else {
             editor.appendChild(img);
           }
-          updateHeight();
         };
         reader.readAsDataURL(file);
         return;
@@ -89,10 +88,6 @@
     return segs;
   }
 
-  function updateHeight() {
-    Streamlit.setFrameHeight(Math.min(Math.max(editor.scrollHeight + 110, 200), 560));
-  }
-
   submit.addEventListener('click', () => {
     const segs = serialize(editor);
     if (!segs.length || segs.every(s => s.type === 'text' && s.text.trim() === '')) {
@@ -102,9 +97,9 @@
     Streamlit.setComponentValue(JSON.stringify(segs));
   });
 
-  editor.addEventListener('input', updateHeight);
-  window.addEventListener('load', updateHeight);
-  updateHeight();
+  // 通知组件就绪，并设置固定高度（编辑器内部滚动），避免输入时反复调整 iframe 高度导致闪烁
+  Streamlit.setComponentReady();
+  Streamlit.setFrameHeight(300);
 </script>
 </body>
 </html>
