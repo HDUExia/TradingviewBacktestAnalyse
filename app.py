@@ -745,7 +745,7 @@ def main():
         st.markdown("<style>[data-testid='stSidebar'] { display: none; }</style>", unsafe_allow_html=True)
 
     # 顶部应用栏
-    bar = st.columns([4, 1, 1, 1, 1, 1])
+    bar = st.columns([4, 1, 1, 1, 1, 1], vertical_alignment="center")
     with bar[0]:
         st.markdown("### 📈 复盘分析")
     for i, (page, label) in enumerate([("summary", "总结"), ("detail", "交易"), ("data", "数据")]):
@@ -754,10 +754,10 @@ def main():
                 st.session_state.page = page
                 st.rerun()
     with bar[4]:
-        with st.popover("⚙️ 设置", use_container_width=True):
+        with st.popover("设置", use_container_width=True):
             _settings_ui()
     with bar[5]:
-        with st.popover("📊 指标", use_container_width=True):
+        with st.popover("指标", use_container_width=True):
             _indicators_ui()
     st.divider()
 
