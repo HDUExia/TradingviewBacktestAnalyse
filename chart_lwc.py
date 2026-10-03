@@ -101,6 +101,7 @@ def render_chart(
             "color": s["color"],
             "width": s["width"],
             "style": s["style"],
+            "scale": s.get("scale", "price"),
             "points": _points(s["values"]),
         }
         for s in overlays
@@ -229,7 +230,8 @@ def render_chart(
       const line = chart.addLineSeries({{
         color: o.color, lineWidth: o.width,
         lineStyle: LINE_STYLES[o.style] || LightweightCharts.LineStyle.Solid,
-        priceLineVisible: false, lastValueVisible: true,
+        priceLineVisible: false, lastValueVisible: o.scale === 'price',
+        priceScaleId: o.scale === 'volume' ? '' : 'right',
       }});
       line.setData(o.points);
     }});

@@ -17,7 +17,7 @@ series 结构：
 import pandas as pd
 
 
-def _series(key, name, values, pane="main", kind="line", color="#3b82f6", width=2, style="solid", colors=None):
+def _series(key, name, values, pane="main", kind="line", color="#3b82f6", width=2, style="solid", colors=None, scale="price"):
     out = {
         "key": key,
         "name": name,
@@ -27,6 +27,7 @@ def _series(key, name, values, pane="main", kind="line", color="#3b82f6", width=
         "color": color,
         "width": width,
         "style": style,
+        "scale": scale,
     }
     if colors is not None:
         out["colors"] = colors
@@ -92,7 +93,7 @@ def atr(df, length=14):
 
 def volume_ma(df, length=20):
     v = df["volume"].rolling(length).mean()
-    return [_series("vol_ma", f"VOL MA{length}", v, pane="main", color="#f59e0b", width=1)]
+    return [_series("vol_ma", f"VOL MA{length}", v, pane="main", color="#f59e0b", width=1, scale="volume")]
 
 
 INDICATORS = {
