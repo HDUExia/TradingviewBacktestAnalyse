@@ -515,13 +515,13 @@ def summary_page(trades: pd.DataFrame):
         equity = (1 + trades["return_pct"] / 100).cumprod()
         fig = go.Figure(go.Scatter(x=trades["exit_time"], y=equity, mode="lines", line=dict(color="#26a69a", width=2), fill="tozeroy", fillcolor="rgba(38, 166, 154, 0.1)"))
         fig.update_layout(height=300, margin=dict(l=20, r=20, t=30, b=20), paper_bgcolor="#131722", plot_bgcolor="#131722", font_color="#d1d4dc", xaxis_gridcolor="#1e222d", yaxis_gridcolor="#1e222d")
-        st.plotly_chart(fig, width="stretch", key="equity_curve")
+        st.plotly_chart(fig, use_container_width=True, key="equity_curve")
 
     with col_right:
         st.subheader("盈亏分布")
         fig = px.histogram(trades, x="pnl_usd", nbins=20, color="win", color_discrete_map={True: "#26a69a", False: "#ef5350"})
         fig.update_layout(height=300, margin=dict(l=20, r=20, t=30, b=20), paper_bgcolor="#131722", plot_bgcolor="#131722", font_color="#d1d4dc", xaxis_gridcolor="#1e222d", yaxis_gridcolor="#1e222d", showlegend=False)
-        st.plotly_chart(fig, width="stretch", key="pnl_hist")
+        st.plotly_chart(fig, use_container_width=True, key="pnl_hist")
 
     col_left2, col_right2 = st.columns(2)
 
@@ -530,7 +530,7 @@ def summary_page(trades: pd.DataFrame):
         session_stats = trades.groupby("session").agg(win_rate=("win", "mean"), count=("win", "size")).reset_index()
         fig = go.Figure(go.Bar(x=session_stats["session"], y=session_stats["win_rate"]*100, marker_color=["#26a69a" if v >= 0.5 else "#ef5350" for v in session_stats["win_rate"]], text=session_stats["count"], textposition="auto"))
         fig.update_layout(height=300, margin=dict(l=20, r=20, t=30, b=20), paper_bgcolor="#131722", plot_bgcolor="#131722", font_color="#d1d4dc", xaxis_gridcolor="#1e222d", yaxis_gridcolor="#1e222d", yaxis=dict(ticksuffix="%"))
-        st.plotly_chart(fig, width="stretch", key="session_winrate")
+        st.plotly_chart(fig, use_container_width=True, key="session_winrate")
 
     with col_right2:
         st.subheader("MAE/MFE 散点")
@@ -538,7 +538,7 @@ def summary_page(trades: pd.DataFrame):
         fig.add_hline(y=0, line_dash="dash", line_color="gray")
         fig.add_vline(x=0, line_dash="dash", line_color="gray")
         fig.update_layout(height=300, margin=dict(l=20, r=20, t=30, b=20), paper_bgcolor="#131722", plot_bgcolor="#131722", font_color="#d1d4dc", xaxis_gridcolor="#1e222d", yaxis_gridcolor="#1e222d")
-        st.plotly_chart(fig, width="stretch", key="mae_mfe")
+        st.plotly_chart(fig, use_container_width=True, key="mae_mfe")
 
     st.divider()
     st.subheader("交易明细")
