@@ -258,6 +258,20 @@ def detail_page(trades: pd.DataFrame):
         (trade["entry_time"] - pd.Timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S"),
         (trade["exit_time"] + pd.Timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S"),
     )
+
+    if df_5m_for_window.empty:
+        st.warning("⚠️ 该交易时间窗口没有本地 K 线数据。")
+        st.markdown("如果这笔交易发生在**最近 1~2 天**，可以用 QuantData 从 TradingView 拉取：")
+        st.code(
+            f"python3 scripts/fetch_tv_data.py --symbol MES1! --timeframe 5m "
+            f"--start {trade['entry_time'].date()} --end {trade['exit_time'].date()}"
+        )
+        st.markdown(
+            "更早的历史交易请用本地 1 分钟行情生成："
+            "`python3 scripts/prepare_mes_intraday_qlib.py --input <1分钟行情.csv> --symbol MES`"
+        )
+        return
+
     entry_idx = (df_5m_for_window["datetime"] <= trade["entry_time"]).sum() - 1
     exit_idx = (df_5m_for_window["datetime"] <= trade["exit_time"]).sum() - 1
     start_idx = max(0, entry_idx - st.session_state.bars_before)

@@ -8,10 +8,13 @@ import argparse
 import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from chart_data import write_qlib  # noqa: E402
+
 DEFAULT_INPUT = ROOT / "@MES#C_1min_20260611.csv"
 DEFAULT_SYMBOL = "MES"
 DEFAULT_CSV_DIR = ROOT / "data" / "csv_intraday"
@@ -65,46 +68,6 @@ def write_csv(df: pd.DataFrame, freq: str, symbol: str, csv_dir: Path):
     print(f"      range: {df['date'].min()} ~ {df['date'].max()}")
 
 
-def convert_to_qlib(df: pd.DataFrame, freq: str, symbol: str, qlib_base: Path):
-    qlib_dir = qlib_base / f"futures_{freq}"
-    qlib_dir.mkdir(parents=True, exist_ok=True)
-
-    # Calendar
-    calendar = df["date"].dt.strftime("%Y-%m-%d %H:%M:%S").sort_values().unique()
-    cal_path = qlib_dir / "calendars" / f"{freq}.txt"
-    cal_path.parent.mkdir(parents=True, exist_ok=True)
-    np.savetxt(cal_path, calendar, fmt="%s")
-
-    # Instruments
-    inst_path = qlib_dir / "instruments" / "all.txt"
-    inst_path.parent.mkdir(parents=True, exist_ok=True)
-    start = df["date"].min().strftime("%Y-%m-%d %H:%M:%S")
-    end = df["date"].max().strftime("%Y-%m-%d %H:%M:%S")
-    inst_path.write_text(f"{symbol}\t{start}\t{end}\n", encoding="utf-8")
-
-    # Features
-    feat_dir = qlib_dir / "features" / symbol.lower()
-    feat_dir.mkdir(parents=True, exist_ok=True)
-    date_to_idx = {d: i for i, d in enumerate(calendar)}
-
-    fields = ["open", "high", "low", "close", "volume"]
-    df_sorted = df.sort_values("date")
-    for field in fields:
-        aligned = np.full(len(calendar), np.nan, dtype=np.float32)
-        for _, row in df_sorted.iterrows():
-            idx = date_to_idx[row["date"].strftime("%Y-%m-%d %H:%M:%S")]
-            aligned[idx] = float(row[field])
-
-        valid_mask = ~np.isnan(aligned)
-        start_idx = int(np.argmax(valid_mask))
-        data = aligned[start_idx:]
-        bin_path = feat_dir / f"{field}.{freq}.bin"
-        with bin_path.open("wb") as fp:
-            np.hstack([start_idx, data]).astype("<f").tofile(fp)
-
-    print(f"  Qlib {freq}: {qlib_dir}")
-
-
 def main():
     parser = argparse.ArgumentParser(description="1 分钟 CSV → 5/15/60 分钟 CSV + Qlib")
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT, help="1 分钟 CSV 路径")
@@ -124,7 +87,7 @@ def main():
         print(f"\nProcessing {freq} ...")
         df_freq = resample(df_1m, rule, args.symbol)
         write_csv(df_freq, freq, args.symbol, args.csv_dir)
-        convert_to_qlib(df_freq, freq, args.symbol, args.qlib_dir)
+        write_qlib(df_freq, freq, args.symbol, args.qlib_dir)
 
     print("\nDone. Qlib multi-frequency data ready.")
 

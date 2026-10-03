@@ -1,0 +1,3 @@
+[submodule "vendor/quantdata"]
+	path = vendor/quantdata
+	url = https://github.com/HDUExia/QuantData.git

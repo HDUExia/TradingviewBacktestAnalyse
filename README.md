@@ -19,7 +19,7 @@
 
 ```bash
 # 1) 克隆并进入
-git clone git@github.com:HDUExia/TradingviewBacktestAnalyse.git
+git clone --recurse-submodules git@github.com:HDUExia/TradingviewBacktestAnalyse.git
 cd TradingviewBacktestAnalyse
 
 # 2) 建虚拟环境并安装依赖
@@ -38,6 +38,10 @@ streamlit run app.py
 
 > `run_demo.sh` 会生成 `sample_data/` 下的示例数据，并输出到 `data/`（已加入
 > `.gitignore`）。想换成自己的数据，看下一节。
+> 本仓库以 [QuantData](https://github.com/HDUExia/QuantData) 作为子项目
+> （`vendor/quantdata`），用于缺数据时从 TradingView 拉取；克隆时加
+> `--recurse-submodules` 会一起拉下来。如果漏了，可补：
+> `git submodule update --init --recursive`。
 
 ## 用自己的数据
 
@@ -65,17 +69,44 @@ streamlit run app.py
 
 `--symbol` 默认是 `MES`，按你的品种改即可。
 
+## 从 TradingView 拉取缺失数据（通过 QuantData）
+
+当某笔交易的 K 线数据不在本地时，面板会提示你可以用 QuantData 从 TradingView
+拉取。命令：
+
+```bash
+python3 scripts/fetch_tv_data.py --symbol MES1! --timeframe 5m \
+  --start 2026-10-01 --end 2026-10-02
+```
+
+它会调用 QuantData 的 `tradingview` provider，把拉到的 K 线合并进
+`data/csv_intraday/` 并重建 Qlib 数据，刷新面板即可看到。
+
+> ⚠️ **重要限制**：TradingView MCP 只能拿到**最近约 2 个交易日、约 300 根**
+> 的 intraday K 线，**历史区间拉不到**。所以：
+> - 最近 1~2 天的交易 → 可以用本命令从 TV 拉取；
+> - 更早的交易 → 仍需要用本地 1 分钟行情生成（上一节的
+>   `prepare_mes_intraday_qlib.py`）。
+>
+> 另外，拉取需要本机装好 TradingView Desktop、Node.js 和 TradingView MCP 的
+> `tv` CLI（默认路径 `~/.claude/tradingview-mcp/src/cli/index.js`，可用
+> `TV_CLI_PATH` 覆盖）。详见 QuantData 的
+> [docs/tradingview-mcp.md](https://github.com/HDUExia/QuantData/blob/master/docs/tradingview-mcp.md)。
+
 ## 目录结构
 
 ```
 ├── app.py                          # 复盘面板（Streamlit 入口）
+├── chart_data.py                   # Qlib 写入 + 通过 QuantData 从 TV 拉取的桥接层
 ├── chart_lwc.py                    # Lightweight Charts K 线渲染
 ├── sample_data/                    # 示例行情与示例交易（可开箱体验）
+├── vendor/quantdata/               # QuantData 子项目（git submodule）
 ├── scripts/
 │   ├── run_demo.sh                 # 一键生成示例数据并初始化
 │   ├── generate_sample_data.py     # 生成示例数据
 │   ├── parse_replay_trades.py      # 解析回放交易 CSV → 单笔交易
 │   ├── prepare_mes_intraday_qlib.py# 1 分钟行情 → 5/15/60 分钟 CSV + Qlib
+│   ├── fetch_tv_data.py            # 通过 QuantData 从 TradingView 拉取 K 线
 │   ├── verify_mes_5min.py          # 校验 Qlib 分钟数据覆盖交易时段
 │   └── test_app_logic.py           # 不启动服务，测试面板核心逻辑
 └── docs/
@@ -85,7 +116,7 @@ streamlit run app.py
 ## 常见问题
 
 - **`pyqlib` / `numpy` 安装失败**：先 `pip install --upgrade pip`，或换 Python 3.9/3.10 重新建虚拟环境。
-- **K 线加载为空**：先运行 `bash scripts/run_demo.sh`，或用 `prepare_mes_intraday_qlib.py` 重新生成 Qlib 数据。
+- **K 线加载为空**：先用示例数据确认能跑（`bash scripts/run_demo.sh`）；如果是自己的数据，用 `prepare_mes_intraday_qlib.py` 生成，或对最近 1~2 天的交易用 `fetch_tv_data.py` 从 TradingView 拉取。
 - **出现「交易价格与 K 线不完全匹配」黄色警告**：通常是因为数据源或合约连续方式不同，属于提示，不影响查看。
 - **macOS 多进程报错**：脚本里已内置线程模式，一般无需额外处理。
 
