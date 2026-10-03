@@ -45,7 +45,6 @@ chart_lwc.py                 # Lightweight Charts 渲染（K 线+指标+副图+�
 chart_data.py                # 与 QuantData 的桥接 + CSV 读写 + 缺口填充
 indicators.py                # 指标插件库（注册表 + 计算）
 markdown_io.py               # Markdown 报告导入导出（原始交易数据 + 评论）
-components/rich_comment/     # 评论富文本组件（自定义 Streamlit 组件）
 scripts/
   generate_sample_data.py    # 生成示例行情/交易
   parse_replay_trades.py     # 回放交易 CSV -> data/replay_trades_parsed.csv
@@ -131,11 +130,12 @@ data/                        # 运行期数据（gitignore，不提交）
 - `compute_indicators(df, instances)`：instances 是 `[{type, params, color}]`，返回 `(overlays, panes)`
 - 指标在**渲染时**按需计算（不是数据准备阶段固化）
 
-### components/rich_comment（评论组件）
+### 评论输入
 
-- 用 `st.components.v1.declare_component` 注册，路径 `ROOT/components/rich_comment`
-- contenteditable + 拦截 paste 事件，把剪贴板图片按光标位置插成 `<img>`
-- 提交时 `Streamlit.setComponentValue(JSON 数组)`，Python 端解析 segments
+- 用原生 `st.form` + `st.text_area` + `st.file_uploader(accept_multiple_files=True)`。
+- 评论结构仍是 segments（文字段 + 图片段），图片按上传顺序追加在文字后。
+- 历史说明：曾用 `declare_component` 自定义富文本组件支持 Ctrl+V 粘贴图片，但因
+  iframe 反复重渲染导致输入框闪烁、无法输入，已改回原生组件（可靠，但不支持剪贴板粘贴）。
 
 ## 6. 关键设计决策
 
