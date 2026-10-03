@@ -429,10 +429,12 @@ def sidebar(trades: pd.DataFrame | None):
             )
         with c2:
             if st.button("➕ 添加", use_container_width=True, key="ind_add_btn"):
+                used = {inst.get("color") for inst in instances}
                 instances.append({
                     "id": uuid.uuid4().hex,
                     "type": new_type,
                     "params": dict(indicators.INDICATORS[new_type]["params"]),
+                    "color": indicators.next_color(used),
                 })
                 st.rerun()
 
@@ -444,8 +446,15 @@ def sidebar(trades: pd.DataFrame | None):
             if not entry:
                 continue
             with st.container(border=True):
-                ch, cd = st.columns([5, 1])
+                ch, ccol, cd = st.columns([4, 1, 1])
                 ch.markdown(f"**{entry['label']}**")
+                with ccol:
+                    inst["color"] = st.color_picker(
+                        "颜色",
+                        value=inst.get("color", "#3b82f6"),
+                        key=f"indcolor_{inst['id']}",
+                        label_visibility="collapsed",
+                    )
                 if cd.button("删除", key=f"ind_del_{inst['id']}", use_container_width=True):
                     st.session_state.ind_instances = [x for x in instances if x["id"] != inst["id"]]
                     st.rerun()

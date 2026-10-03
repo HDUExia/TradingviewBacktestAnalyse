@@ -17,6 +17,35 @@ series 结构：
 import pandas as pd
 
 
+PALETTE = [
+    "#f59e0b", "#3b82f6", "#a78bfa", "#22c55e", "#ef4444",
+    "#06b6d4", "#eab308", "#f97316", "#8b5cf6", "#ec4899",
+]
+
+_SHORT = {
+    "sma": "MA",
+    "ema": "EMA",
+    "boll": "BOLL",
+    "rsi": "RSI",
+    "macd": "MACD",
+    "atr": "ATR",
+    "vol_ma": "VOL MA",
+}
+
+
+def next_color(used_colors):
+    for c in PALETTE:
+        if c not in used_colors:
+            return c
+    return PALETTE[len(used_colors) % len(PALETTE)]
+
+
+def instance_label(iid, params):
+    short = _SHORT.get(iid, iid)
+    vals = ", ".join(str(v) for v in params.values())
+    return f"{short}({vals})"
+
+
 def _series(key, name, values, pane="main", kind="line", color="#3b82f6", width=2, style="solid", colors=None, scale="price"):
     out = {
         "key": key,
@@ -49,7 +78,7 @@ def boll(df, length=20, mult=2.0, source="close"):
     std = df[source].rolling(length).std()
     return [
         _series("boll_upper", "BOLL上轨", mid + mult * std, color="#a78bfa"),
-        _series("boll_mid", "BOLL中轨", mid, color="#e5e7eb", width=1),
+        _series("boll_mid", "BOLL中轨", mid, color="#e5e7eb", width=1, style="dashed"),
         _series("boll_lower", "BOLL下轨", mid - mult * std, color="#a78bfa"),
     ]
 
@@ -72,7 +101,7 @@ def macd(df, fast=12, slow=26, signal=9):
     colors = ["#26a69a" if h >= 0 else "#ef5350" for h in hist]
     return [
         _series("macd", "MACD", macd_line, pane="macd", color="#3b82f6"),
-        _series("macd_signal", "Signal", signal_line, pane="macd", color="#f59e0b"),
+        _series("macd_signal", "Signal", signal_line, pane="macd", color="#f59e0b", style="dashed"),
         _series("macd_hist", "Hist", hist, pane="macd", kind="histogram", color="#34d399", colors=colors),
     ]
 
@@ -114,11 +143,16 @@ def compute_indicators(df, instances):
     for inst in instances:
         iid = inst.get("type") if isinstance(inst, dict) else inst
         params = inst.get("params") if isinstance(inst, dict) else {}
+        color = inst.get("color") if isinstance(inst, dict) else None
         entry = INDICATORS.get(iid)
         if not entry:
             continue
         merged = {**entry["params"], **(params or {})}
+        label = instance_label(iid, merged)
         for s in entry["compute"](df, **merged):
+            s["label"] = label
+            if color:
+                s["color"] = color
             if s["pane"] == "main":
                 overlays.append(s)
             else:

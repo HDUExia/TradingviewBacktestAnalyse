@@ -98,6 +98,7 @@ def render_chart(
     overlays_js = [
         {
             "name": s["name"],
+            "label": s.get("label", s["name"]),
             "color": s["color"],
             "width": s["width"],
             "style": s["style"],
@@ -114,6 +115,7 @@ def render_chart(
             "series": [
                 {
                     "name": s["name"],
+                    "label": s.get("label", s["name"]),
                     "kind": s["kind"],
                     "color": s["color"],
                     "width": s["width"],
@@ -145,17 +147,20 @@ def render_chart(
     #container {{ width: 100%; height: {height}px; position: relative; }}
     #title {{ position: absolute; top: 6px; left: 10px; font-size: 13px; color: #d1d4dc; z-index: 10; background: rgba(19, 23, 34, 0.85); padding: 3px 8px; border-radius: 4px; pointer-events: none; border: 1px solid #2a2e39; }}
     #legend {{ position: absolute; top: 6px; right: 60px; font-size: 12px; color: #d1d4dc; z-index: 10; background: rgba(19, 23, 34, 0.85); padding: 3px 8px; border-radius: 4px; pointer-events: none; border: 1px solid #2a2e39; font-variant-numeric: tabular-nums; }}
+    #tooltip {{ position: absolute; display: none; z-index: 20; background: rgba(19, 23, 34, 0.96); color: #d1d4dc; padding: 4px 8px; border-radius: 4px; font-size: 12px; pointer-events: none; border: 1px solid #2a2e39; white-space: nowrap; }}
   </style>
 </head>
 <body>
   <div id="container">
     <div id="title">{title} · 时区 {tz_label}</div>
     <div id="legend">O — H — L — C — | Vol —</div>
+    <div id="tooltip"></div>
   </div>
   {pane_divs}
   <script>
     const container = document.getElementById('container');
     const legend = document.getElementById('legend');
+    const tooltip = document.getElementById('tooltip');
     const TZ = {json.dumps(tz)};
     const ENTRY_TS = {entry_ts};
     const EXIT_TS = {exit_ts};
@@ -226,6 +231,7 @@ def render_chart(
     volSeries.priceScale().applyOptions({{ scaleMargins: {{ top: 0.82, bottom: 0 }}, alignLabels: false }});
 
     const overlays = {json.dumps(overlays_js)};
+    const overlayInfo = [];
     overlays.forEach((o) => {{
       const line = chart.addLineSeries({{
         color: o.color, lineWidth: o.width,
@@ -234,9 +240,37 @@ def render_chart(
         priceScaleId: o.scale === 'volume' ? '' : 'right',
       }});
       line.setData(o.points);
+      overlayInfo.push({{ series: line, label: o.label }});
     }});
 
+    function updateTooltip(param) {{
+      if (!param || !param.time || !param.point) {{
+        tooltip.style.display = 'none';
+        return;
+      }}
+      let best = null, bestDist = 40;
+      for (const info of overlayInfo) {{
+        const data = param.seriesData.get(info.series);
+        if (!data || data.value === undefined) continue;
+        const y = info.series.priceToCoordinate(data.value);
+        if (y === null) continue;
+        const dist = Math.abs(y - param.point.y);
+        if (dist < bestDist) {{ bestDist = dist; best = info; }}
+      }}
+      if (best) {{
+        const data = param.seriesData.get(best.series);
+        const c = best.series.options().color;
+        tooltip.style.display = 'block';
+        tooltip.style.left = Math.min(param.point.x + 14, container.clientWidth - 190) + 'px';
+        tooltip.style.top = (param.point.y - 32) + 'px';
+        tooltip.innerHTML = `<span style="color:${{c}}">●</span> ${{best.label}} <b>${{data.value.toFixed(2)}}</b>`;
+      }} else {{
+        tooltip.style.display = 'none';
+      }}
+    }}
+
     chart.subscribeCrosshairMove((param) => {{
+      updateTooltip(param);
       if (!param.time || !param.point) {{
         legend.innerHTML = 'O — H — L — C — | Vol —';
         return;
