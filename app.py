@@ -314,7 +314,7 @@ def _on_trades_upload() -> None:
 
 def data_page():
     st.header("🛠 数据管理")
-    st.caption("上传交易记录后，可一键自动分析并拉取对应区间的行情。")
+    st.caption("先导入交易数据，再准备行情数据，即可开始复盘。")
 
     # 当前数据状态
     s1, s2 = st.columns(2)
@@ -330,10 +330,19 @@ def data_page():
     else:
         s2.warning("行情数据：无")
 
-    tab_trades, tab_klines, tab_auto = st.tabs(["📄 回放交易", "📈 行情 K 线", "🚀 一键分析"])
+    st.divider()
 
-    with tab_trades:
-        st.subheader("上传 TradingView 回放交易 CSV（自动解析）")
+    # ── 交易数据 ──
+    st.subheader("📄 交易数据")
+    trade_mode = st.selectbox(
+        "导入方式",
+        ["TV 数据导入", "TBA 数据导入"],
+        key="trade_mode",
+        help="TV 数据导入：上传 TradingView 回放交易 CSV；TBA 数据导入：导入之前导出的 Markdown 报告。",
+    )
+
+    if trade_mode == "TV 数据导入":
+        st.caption("上传 TradingView 导出的回放交易 CSV，自动解析成单笔交易。")
         st.caption(
             "列名需包含 `日期和时间、类型、交易编号、信号、价格 USD、大小（数量）、"
             "净损益 USD、回报 %、手续费 USD、有利波动 USD、有利波动 %、不利波动 USD、"
@@ -345,10 +354,8 @@ def data_page():
             kind, text = msg
             (st.success if kind == "success" else st.error)(text)
         st.caption("解析后会保存到 `data/replay_trades_parsed.csv`，刷新页面不会丢失。")
-
-        st.divider()
-        st.subheader("或者导入 Markdown 报告")
-        st.caption("报告会反解析成「原始交易数据 + 评论」（K 线数据需单独准备）。")
+    else:
+        st.caption("导入之前导出的 TBA Markdown 报告，反解析成「原始交易数据 + 评论」（K 线数据需单独准备）。")
         md_file = st.file_uploader("选择 .md 文件", type=["md", "markdown"], key="md_upload")
         if md_file is not None and st.button("导入报告", key="btn_md_import"):
             try:
@@ -367,8 +374,40 @@ def data_page():
             except Exception as exc:
                 st.error(f"导入失败：{exc}")
 
-    with tab_klines:
-        st.subheader("上传 1 分钟行情 CSV")
+    st.divider()
+
+    # ── 行情数据 ──
+    st.subheader("📈 行情数据")
+    kline_mode = st.selectbox(
+        "获取方式",
+        ["自动拉取", "手动导入"],
+        key="kline_mode",
+        help="自动拉取：通过 TradingView MCP 按交易区间自动拉取；手动导入：上传本地 1 分钟行情 CSV。",
+    )
+
+    if kline_mode == "自动拉取":
+        st.caption("根据交易记录自动判定「进场最早 ~ 出场最晚」的区间（前后各留 1 天），通过 MCP 拉取 5/15/60 分钟行情。")
+        symbol = st.text_input("TradingView 品种", value="MES1!", key="auto_symbol")
+        rng = trades_date_range(TRADES_CSV)
+        if rng is None:
+            st.warning("还没有交易数据，请先在上方导入交易数据。")
+        else:
+            start, end = rng
+            st.info(f"自动判定的拉取区间：**{start} ~ {end}**（{(end - start).days} 天）")
+        if st.button("🚀 开始拉取", type="primary", use_container_width=True, disabled=(rng is None)):
+            start, end = rng
+            with st.spinner(f"正在拉取 {symbol} {start} ~ {end} 的 5 分钟数据（历史区间走回放模式，可能较慢）…"):
+                try:
+                    n = auto_fetch_klines(symbol, start, end)
+                    st.cache_data.clear()
+                    if n:
+                        st.success(f"完成：拉取 {n} 根 5 分钟 K 线，并已生成 15/60 分钟数据。去「📈 交易」页查看。")
+                    else:
+                        st.error("拉取失败：没拿到数据，请确认 TradingView Desktop 已运行、品种正确。")
+                except Exception as exc:
+                    st.error(f"拉取失败：{exc}")
+    else:
+        st.caption("上传本地 1 分钟行情 CSV，重采样为 5/15/60 分钟。")
         st.caption(
             "列名需包含 `DateTime, Open, High, Low, Close, Volume`。"
             "可参考 `sample_data/sample_1min.csv`。"
@@ -382,35 +421,6 @@ def data_page():
                 st.success("已生成 5/15/60 分钟行情数据，去「交易」页查看。")
             except Exception as exc:
                 st.error(f"生成失败：{exc}")
-
-    with tab_auto:
-        st.subheader("自动分析交易记录并拉取行情")
-        st.caption(
-            "软件会读取交易记录，自动判定「进场最早 ~ 出场最晚」的时间区间"
-            "（前后各留 1 天），然后通过 MCP 拉取对应的 5/15/60 分钟行情。"
-        )
-
-        symbol = st.text_input("TradingView 品种", value="MES1!", key="auto_symbol")
-
-        rng = trades_date_range(TRADES_CSV)
-        if rng is None:
-            st.warning("还没有交易数据，请先在「📄 回放交易」上传。")
-        else:
-            start, end = rng
-            st.info(f"自动判定的拉取区间：**{start} ~ {end}**（{(end - start).days} 天）")
-
-        if st.button("🚀 开始分析并拉取", type="primary", use_container_width=True, disabled=(rng is None)):
-            start, end = rng
-            with st.spinner(f"正在拉取 {symbol} {start} ~ {end} 的 5 分钟数据（历史区间走回放模式，可能较慢）…"):
-                try:
-                    n = auto_fetch_klines(symbol, start, end)
-                    st.cache_data.clear()
-                    if n:
-                        st.success(f"完成：拉取 {n} 根 5 分钟 K 线，并已生成 15/60 分钟数据。去「📈 交易」页查看。")
-                    else:
-                        st.error("拉取失败：没拿到数据，请确认 TradingView Desktop 已运行、品种正确。")
-                except Exception as exc:
-                    st.error(f"拉取失败：{exc}")
 
 
 # ───────────────────────────────────────────────

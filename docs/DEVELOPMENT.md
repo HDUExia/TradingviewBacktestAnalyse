@@ -95,7 +95,8 @@ data/                        # 运行期数据（gitignore，不提交）
 - `_settings_ui()` / `_indicators_ui()`：设置和指标管理的弹出内容（放在 popover 里）
 - `summary_page()`：汇总指标 + 权益曲线/盈亏分布/时段胜率/MAE-MFE
 - `detail_page()`：顶部「选择交易」下拉 + 上一笔/下一笔，加载全量 K 线 → 传指标 → 渲染三周期图 + 评论
-- `data_page()`：上传交易 CSV、上传 1 分钟行情、从 TradingView 一键拉取（自动判定区间）
+- `data_page()`：两个下拉框分组——「交易数据」= TV 数据导入 / TBA Markdown 导入；
+  「行情数据」= 自动拉取（TradingView MCP，自动判定区间）/ 手动导入（1 分钟 CSV）
 - 评论：`load_comments` / `add_comment` / `_process_comment_segments`（base64 图片落盘）
 
 ### 主题 / 样式
