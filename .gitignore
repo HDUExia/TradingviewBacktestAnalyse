@@ -35,12 +35,8 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# 生成的数据（可由脚本重新生成）
-data/qlib_data/
-data/csv_intraday/
-data/replay_trades_parsed.csv
-data/comments.json
-data/uploads/
+# 运行期生成 / 个人数据（整个 data 目录不提交）
+data/
 
 # 个人交易记录与原始行情大文件
 回放交易_*.csv

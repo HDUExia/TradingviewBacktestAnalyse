@@ -197,31 +197,89 @@ def prepare_intraday(input_path: Path, symbol: str, csv_dir: Path, qlib_dir: Pat
         write_qlib(df_freq, freq, symbol, qlib_dir)
 
 
+def trades_date_range(trades_csv: Path) -> tuple[date, date] | None:
+    """从交易记录里自动判定需要拉取的日期区间（进出场前后各留 1 天余量）。"""
+    if not trades_csv.exists():
+        return None
+    df = pd.read_csv(trades_csv)
+    if df.empty:
+        return None
+    df["entry_time"] = pd.to_datetime(df["entry_time"])
+    df["exit_time"] = pd.to_datetime(df["exit_time"])
+    start = (df["entry_time"].min() - pd.Timedelta(days=1)).date()
+    end = (df["exit_time"].max() + pd.Timedelta(days=1)).date()
+    return start, end
+
+
+def auto_fetch_klines(symbol: str, start: date, end: date) -> int:
+    """拉取 5 分钟数据，再本地重采样出 15/60 分钟，返回 5 分钟根数。"""
+    n = fetch_and_store(symbol, "5m", start, end, CSV_DIR, QLIB_BASE)
+    if n == 0:
+        return 0
+
+    qlib_symbol = symbol.replace("1!", "").replace("#", "").upper()
+    csv5 = CSV_DIR / "5min" / f"{qlib_symbol}.csv"
+    df5 = pd.read_csv(csv5)
+    df5["date"] = pd.to_datetime(df5["date"])
+    df5 = df5.set_index("date").sort_index()
+
+    for freq, rule in [("15min", "15min"), ("60min", "60min")]:
+        df_freq = prep.resample(df5, rule, qlib_symbol)
+        prep.write_csv(df_freq, freq, qlib_symbol, CSV_DIR)
+        write_qlib(df_freq, freq, qlib_symbol, QLIB_BASE)
+    return n
+
+
 # ───────────────────────────────────────────────
 # 数据管理页
 # ───────────────────────────────────────────────
+def _on_trades_upload() -> None:
+    """上传回放交易 CSV 后自动解析并持久化。"""
+    up = st.session_state.get("trades_upload")
+    if up is None:
+        return
+    path = save_upload(up, "uploaded_trades.csv")
+    try:
+        n = parse_replay_trades.parse(path, TRADES_CSV)
+        st.cache_data.clear()
+        st.session_state["trades_parse_msg"] = ("success", f"已解析 {n} 笔交易并保存（刷新后仍在）。")
+    except Exception as exc:
+        st.session_state["trades_parse_msg"] = ("error", f"解析失败：{exc}")
+
+
 def data_page():
     st.header("🛠 数据管理")
-    st.caption("在这里上传或拉取数据，生成面板需要的文件，无需命令行。")
+    st.caption("上传交易记录后，可一键自动分析并拉取对应区间的行情。")
 
-    tab_trades, tab_klines = st.tabs(["📄 回放交易", "📈 行情 K 线"])
+    # 当前数据状态
+    s1, s2 = st.columns(2)
+    if TRADES_CSV.exists():
+        try:
+            s1.success(f"交易记录：已加载 {len(load_trades())} 笔")
+        except Exception:
+            s1.warning("交易记录：文件存在但读取失败")
+    else:
+        s1.warning("交易记录：无")
+    if (QLIB_BASE / "futures_5min").exists():
+        s2.success("行情数据：已有 5/15/60 分钟")
+    else:
+        s2.warning("行情数据：无")
+
+    tab_trades, tab_klines, tab_auto = st.tabs(["📄 回放交易", "📈 行情 K 线", "🚀 一键分析"])
 
     with tab_trades:
-        st.subheader("上传 TradingView 回放交易 CSV")
+        st.subheader("上传 TradingView 回放交易 CSV（自动解析）")
         st.caption(
             "列名需包含 `日期和时间、类型、交易编号、信号、价格 USD、大小（数量）、"
             "净损益 USD、回报 %、手续费 USD、有利波动 USD、有利波动 %、不利波动 USD、"
             "不利波动 %、持续时间（K线）、累计损益 USD`。可参考 `sample_data/sample_trades.csv`。"
         )
-        up = st.file_uploader("选择 CSV 文件", type=["csv"], key="trades_upload")
-        if up is not None and st.button("解析并保存", key="btn_parse"):
-            path = save_upload(up, "uploaded_trades.csv")
-            try:
-                n = parse_replay_trades.parse(path, TRADES_CSV)
-                st.cache_data.clear()
-                st.success(f"已解析 {n} 笔交易，保存到 `data/replay_trades_parsed.csv`。")
-            except Exception as exc:
-                st.error(f"解析失败：{exc}")
+        st.file_uploader("选择 CSV 文件", type=["csv"], key="trades_upload", on_change=_on_trades_upload)
+        msg = st.session_state.get("trades_parse_msg")
+        if msg:
+            kind, text = msg
+            (st.success if kind == "success" else st.error)(text)
+        st.caption("解析后会保存到 `data/replay_trades_parsed.csv`，刷新页面不会丢失。")
 
     with tab_klines:
         st.subheader("方式一：上传 1 分钟行情 CSV")
@@ -261,6 +319,36 @@ def data_page():
                         st.success(f"已拉取 {n} 根 {timeframe} K 线并生成 Qlib 数据。")
                     else:
                         st.warning("没拉到数据：历史 intraday 可能不在可用范围。")
+                except Exception as exc:
+                    st.error(f"拉取失败：{exc}")
+
+    with tab_auto:
+        st.subheader("自动分析交易记录并拉取行情")
+        st.caption(
+            "软件会读取交易记录，自动判定「进场最早 ~ 出场最晚」的时间区间"
+            "（前后各留 1 天），然后通过 MCP 拉取对应的 5/15/60 分钟行情。"
+        )
+
+        symbol = st.text_input("TradingView 品种", value="MES1!", key="auto_symbol")
+
+        rng = trades_date_range(TRADES_CSV)
+        if rng is None:
+            st.warning("还没有交易数据，请先在「📄 回放交易」上传。")
+        else:
+            start, end = rng
+            st.info(f"自动判定的拉取区间：**{start} ~ {end}**（{(end - start).days} 天）")
+
+        if st.button("🚀 开始分析并拉取", type="primary", use_container_width=True, disabled=(rng is None)):
+            start, end = rng
+            with st.spinner(f"正在拉取 {symbol} {start} ~ {end} 的 5 分钟数据（历史区间走回放模式，可能较慢）…"):
+                try:
+                    n = auto_fetch_klines(symbol, start, end)
+                    st.cache_data.clear()
+                    st.cache_resource.clear()
+                    if n:
+                        st.success(f"完成：拉取 {n} 根 5 分钟 K 线，并已生成 15/60 分钟数据。去「📈 交易」页查看。")
+                    else:
+                        st.error("拉取失败：没拿到数据，请确认 TradingView Desktop 已运行、品种正确。")
                 except Exception as exc:
                     st.error(f"拉取失败：{exc}")
 
