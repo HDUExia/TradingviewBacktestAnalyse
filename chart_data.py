@@ -27,6 +27,43 @@ def symbol_name(symbol: str) -> str:
     return symbol.replace("1!", "").replace("#", "").upper()
 
 
+def fill_session_gaps(df: pd.DataFrame, max_gap_minutes: int = 120) -> pd.DataFrame:
+    """填平交易时段内的小缺口（如 CME 每日约 1 小时维护停盘），保证 K 线连续。
+
+    只填 ``max_gap_minutes`` 以内的小缺口；周末/节假日这类数小时到数天的大缺口
+    保持不动。
+    """
+    if df.empty or len(df) < 2:
+        return df
+    df = df.sort_values("date").reset_index(drop=True)
+    bar_step = df["date"].diff().dropna().min()
+    if pd.isna(bar_step):
+        return df
+
+    rows: list[dict] = []
+    for _, row in df.iterrows():
+        if rows:
+            prev = rows[-1]
+            gap = row["date"] - prev["date"]
+            if bar_step < gap <= pd.Timedelta(minutes=max_gap_minutes):
+                t = prev["date"] + bar_step
+                while t < row["date"]:
+                    rows.append(
+                        {
+                            "date": t,
+                            "symbol": prev["symbol"],
+                            "open": prev["close"],
+                            "high": prev["close"],
+                            "low": prev["close"],
+                            "close": prev["close"],
+                            "volume": 0,
+                        }
+                    )
+                    t += bar_step
+        rows.append(row.to_dict())
+    return pd.DataFrame(rows)
+
+
 def fetch_tradingview_bars(
     symbol: str,
     timeframe: str,
@@ -82,5 +119,6 @@ def fetch_and_store(
     else:
         merged = df
     merged = merged.drop_duplicates(subset=["date"], keep="last").sort_values("date")
+    merged = fill_session_gaps(merged)
     merged.to_csv(csv_path, index=False)
     return len(df)

@@ -98,6 +98,8 @@ python3 scripts/fetch_tv_data.py --symbol MES1! --timeframe 5m \
 > 说明：最近的数据直接走 `ohlcv`；历史 intraday 会自动切到 TradingView 的
 > **K 线回放模式**按天分页拉取，所以长区间会慢一些，拉取期间会临时切换图表
 > 到回放模式、结束后恢复。
+> 拉取的是**完整 ETH 盘**（夜盘 + 日盘，每天约 23 小时）；每天约 1 小时的
+> CME 维护停盘会用平价、零成交量的 K 线自动填平，保证 K 线连续。
 >
 > 另外，拉取需要本机装好 TradingView Desktop、Node.js 和 TradingView MCP 的
 > `tv` CLI（默认路径 `~/.claude/tradingview-mcp/src/cli/index.js`，可用

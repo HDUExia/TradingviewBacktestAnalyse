@@ -11,6 +11,10 @@ from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from chart_data import fill_session_gaps  # noqa: E402
+
 DEFAULT_INPUT = ROOT / "@MES#C_1min_20260611.csv"
 DEFAULT_SYMBOL = "MES"
 DEFAULT_CSV_DIR = ROOT / "data" / "csv_intraday"
@@ -58,7 +62,7 @@ def write_csv(df: pd.DataFrame, freq: str, symbol: str, csv_dir: Path):
     out_dir = csv_dir / freq
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"{symbol}.csv"
-    df.to_csv(out, index=False)
+    fill_session_gaps(df).to_csv(out, index=False)
     print(f"  {freq}: {len(df)} rows -> {out}")
     print(f"      range: {df['date'].min()} ~ {df['date'].max()}")
 

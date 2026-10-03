@@ -23,28 +23,30 @@ def generate_bars() -> pd.DataFrame:
     price = 5500.0
     for day_offset in range(4):
         day = datetime(2024, 6, 24) + timedelta(days=day_offset)
-        t = day.replace(hour=9, minute=30)
-        end = day.replace(hour=16, minute=0)
+        t = day.replace(hour=0, minute=0)
+        end = day.replace(hour=23, minute=55)
         while t <= end:
-            price = max(5000.0, price + rng.normal(0, 0.8))
-            open_ = price
-            close = price + rng.normal(0, 0.6)
-            high = max(open_, close) + abs(rng.normal(0, 0.4))
-            low = min(open_, close) - abs(rng.normal(0, 0.4))
-            volume = int(rng.integers(50, 500))
-            rows.append(
-                (
-                    t.strftime("%Y-%m-%d %H:%M"),
-                    "@MES#C",
-                    round(open_, 2),
-                    round(high, 2),
-                    round(low, 2),
-                    round(close, 2),
-                    volume,
-                    0,
+            # 跳过每日 22:00-22:59 维护停盘，模拟 CME 的每日维护（其余为完整 ETH 盘）
+            if not (22 <= t.hour < 23):
+                price = max(5000.0, price + rng.normal(0, 0.8))
+                open_ = price
+                close = price + rng.normal(0, 0.6)
+                high = max(open_, close) + abs(rng.normal(0, 0.4))
+                low = min(open_, close) - abs(rng.normal(0, 0.4))
+                volume = int(rng.integers(50, 500))
+                rows.append(
+                    (
+                        t.strftime("%Y-%m-%d %H:%M"),
+                        "@MES#C",
+                        round(open_, 2),
+                        round(high, 2),
+                        round(low, 2),
+                        round(close, 2),
+                        volume,
+                        0,
+                    )
                 )
-            )
-            price = close
+                price = close
             t += timedelta(minutes=1)
 
     return pd.DataFrame(
@@ -60,10 +62,10 @@ def _close_at(bars: pd.DataFrame, dt: str) -> float:
 
 def generate_trades(bars: pd.DataFrame) -> pd.DataFrame:
     specs = [
-        ("多头进场", "多头出场", "long", "2024-06-24 10:00", "2024-06-24 13:30", "回踩均线做多", "到达目标位止盈"),
-        ("空头进场", "空头出场", "short", "2024-06-25 10:00", "2024-06-25 12:00", "跌破前低做空", "到达目标位止盈"),
-        ("多头进场", "多头出场", "long", "2024-06-26 10:00", "2024-06-26 14:00", "突破做多", "止损离场"),
-        ("空头进场", "空头出场", "short", "2024-06-27 10:00", "2024-06-27 15:00", "反弹做空", "止损离场"),
+        ("多头进场", "多头出场", "long", "2024-06-24 02:00", "2024-06-24 06:00", "回踩均线做多", "到达目标位止盈"),
+        ("空头进场", "空头出场", "short", "2024-06-25 03:00", "2024-06-25 07:00", "跌破前低做空", "到达目标位止盈"),
+        ("多头进场", "多头出场", "long", "2024-06-26 02:00", "2024-06-26 13:00", "突破做多", "止损离场"),
+        ("空头进场", "空头出场", "short", "2024-06-27 04:00", "2024-06-27 09:00", "反弹做空", "止损离场"),
     ]
 
     rows = []
