@@ -449,13 +449,13 @@ def detail_page(trades: pd.DataFrame):
 
     if df_5m_for_window.empty:
         st.warning("⚠️ 该交易时间窗口没有本地 K 线数据。")
-        st.markdown("如果这笔交易发生在**最近 1~2 天**，可以用 QuantData 从 TradingView 拉取：")
+        st.markdown("到「🛠 数据」→「🚀 一键分析」或用 QuantData 从 TradingView 拉取（历史区间走回放模式）：")
         st.code(
             f"python3 scripts/fetch_tv_data.py --symbol MES1! --timeframe 5m "
             f"--start {trade['entry_time'].date()} --end {trade['exit_time'].date()}"
         )
         st.markdown(
-            "更早的历史交易请用本地 1 分钟行情生成："
+            "或者用本地 1 分钟行情生成："
             "`python3 scripts/prepare_mes_intraday.py --input <1分钟行情.csv> --symbol MES`"
         )
         return
