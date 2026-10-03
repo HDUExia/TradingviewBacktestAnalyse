@@ -39,6 +39,8 @@ Thumbs.db
 data/qlib_data/
 data/csv_intraday/
 data/replay_trades_parsed.csv
+data/comments.json
+data/uploads/
 
 # 个人交易记录与原始行情大文件
 回放交易_*.csv

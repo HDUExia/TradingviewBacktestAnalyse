@@ -11,8 +11,10 @@ MES 回放交易分析面板 v3
 """
 from __future__ import annotations
 
+import json
 import sys
-from datetime import date, timedelta
+import uuid
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -32,6 +34,8 @@ ROOT = Path(__file__).resolve().parent
 TRADES_CSV = ROOT / "data" / "replay_trades_parsed.csv"
 QLIB_BASE = ROOT / "data" / "qlib_data"
 CSV_DIR = ROOT / "data" / "csv_intraday"
+COMMENTS_JSON = ROOT / "data" / "comments.json"
+UPLOADS_DIR = ROOT / "data" / "uploads"
 
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -158,6 +162,30 @@ def save_upload(uploaded, name: str) -> Path:
     path = ROOT / "data" / name
     path.write_bytes(uploaded.getvalue())
     return path
+
+
+def load_comments() -> list[dict]:
+    if not COMMENTS_JSON.exists():
+        return []
+    try:
+        return json.loads(COMMENTS_JSON.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def add_comment(trade_id: int, text: str, image_path: str | None = None) -> None:
+    comments = load_comments()
+    comments.append(
+        {
+            "id": uuid.uuid4().hex,
+            "trade_id": trade_id,
+            "text": text,
+            "image_path": image_path,
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+        }
+    )
+    COMMENTS_JSON.parent.mkdir(parents=True, exist_ok=True)
+    COMMENTS_JSON.write_text(json.dumps(comments, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def prepare_intraday(input_path: Path, symbol: str, csv_dir: Path, qlib_dir: Path) -> None:
@@ -427,6 +455,39 @@ def detail_page(trades: pd.DataFrame):
     st.write(f"**出场信号：** {trade['exit_signal']}")
     st.write(f"**进场时间：** {trade['entry_time']}")
     st.write(f"**出场时间：** {trade['exit_time']}")
+
+    # 复盘评论
+    st.divider()
+    st.subheader("📝 复盘评论")
+
+    trade_comments = [c for c in load_comments() if c.get("trade_id") == selected_id]
+    if not trade_comments:
+        st.caption("还没有评论，写下你的复盘心得吧。")
+    for c in reversed(trade_comments):
+        with st.container(border=True):
+            st.markdown(f"*{c.get('created_at', '')}*")
+            st.write(c.get("text", ""))
+            img_path = c.get("image_path")
+            if img_path and Path(img_path).exists():
+                st.image(str(img_path), width=440)
+
+    with st.form("comment_form"):
+        text = st.text_area("写评论…", key="comment_text", placeholder="例如：这里进场偏早，应该等二次确认…")
+        img_file = st.file_uploader("贴图（可选）", type=["png", "jpg", "jpeg", "gif", "webp"], key="comment_img")
+        submitted = st.form_submit_button("发布评论")
+    if submitted:
+        if not text.strip():
+            st.warning("评论内容不能为空。")
+        else:
+            image_path = None
+            if img_file is not None:
+                UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+                ext = Path(img_file.name).suffix or ".png"
+                dest = UPLOADS_DIR / f"trade{selected_id}_{uuid.uuid4().hex}{ext}"
+                dest.write_bytes(img_file.getvalue())
+                image_path = str(dest)
+            add_comment(int(selected_id), text.strip(), image_path)
+            st.rerun()
 
 
 # ───────────────────────────────────────────────
