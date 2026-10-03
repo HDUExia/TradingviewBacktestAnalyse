@@ -12,7 +12,7 @@ INPUT = ROOT / "回放交易_CME_MINI_MES1!_2026-08-23_57da9.csv"
 OUTPUT = ROOT / "data" / "replay_trades_parsed.csv"
 
 
-def parse(input_path: Path = INPUT, output_path: Path = OUTPUT):
+def parse(input_path: Path = INPUT, output_path: Path = OUTPUT) -> int:
     df = pd.read_csv(input_path, encoding="utf-8-sig")
     df["datetime"] = pd.to_datetime(df["日期和时间"])
 
@@ -60,6 +60,7 @@ def parse(input_path: Path = INPUT, output_path: Path = OUTPUT):
     trades_df.to_csv(output_path, index=False)
     print(f"Parsed {len(trades_df)} trades -> {output_path}")
     print(trades_df[["trade_id", "direction", "entry_time", "exit_time", "pnl_usd", "return_pct", "duration_bars"]].head())
+    return len(trades_df)
 
 
 def main() -> None:

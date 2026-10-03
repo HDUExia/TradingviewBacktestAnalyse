@@ -1,23 +1,24 @@
 """
-MES 回放交易分析面板 v2
+MES 回放交易分析面板 v3
 
-UI 结构：
-- 左侧边栏：导航（总结 / 交易详情）、交易列表、设置齿轮
+- 左侧边栏：导航（总结 / 交易 / 数据管理）、交易列表、设置齿轮
 - 总结页：统计数据、权益曲线、盈亏分布
 - 交易详情页：K 线图 + 交易数据
+- 数据管理页：上传回放交易 CSV、上传 1 分钟行情、或从 TradingView 拉取
 
 运行方式：
-    cd /Users/exia/git/ExiaQuant
-    source venv/bin/activate
     streamlit run app.py
 """
+from __future__ import annotations
+
+import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
-from plotly.subplots import make_subplots
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -30,6 +31,14 @@ from chart_lwc import render_chart
 ROOT = Path(__file__).resolve().parent
 TRADES_CSV = ROOT / "data" / "replay_trades_parsed.csv"
 QLIB_BASE = ROOT / "data" / "qlib_data"
+CSV_DIR = ROOT / "data" / "csv_intraday"
+
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "scripts"))
+
+import parse_replay_trades  # noqa: E402
+import prepare_mes_intraday_qlib as prep  # noqa: E402
+from chart_data import fetch_and_store, write_qlib  # noqa: E402
 
 st.set_page_config(page_title="MES 回放交易分析", layout="wide", initial_sidebar_state="expanded")
 
@@ -143,26 +152,114 @@ def max_consecutive(series):
     return max_count
 
 
+def save_upload(uploaded, name: str) -> Path:
+    """把 Streamlit 上传的文件保存到 data/ 目录，返回路径。"""
+    (ROOT / "data").mkdir(parents=True, exist_ok=True)
+    path = ROOT / "data" / name
+    path.write_bytes(uploaded.getvalue())
+    return path
+
+
+def prepare_intraday(input_path: Path, symbol: str, csv_dir: Path, qlib_dir: Path) -> None:
+    """1 分钟 CSV → 5/15/60 分钟 CSV + Qlib。"""
+    df_1m = prep.load_1min(input_path, symbol)
+    for freq, rule in prep.FREQS.items():
+        df_freq = prep.resample(df_1m, rule, symbol)
+        prep.write_csv(df_freq, freq, symbol, csv_dir)
+        write_qlib(df_freq, freq, symbol, qlib_dir)
+
+
+# ───────────────────────────────────────────────
+# 数据管理页
+# ───────────────────────────────────────────────
+def data_page():
+    st.header("🛠 数据管理")
+    st.caption("在这里上传或拉取数据，生成面板需要的文件，无需命令行。")
+
+    tab_trades, tab_klines = st.tabs(["📄 回放交易", "📈 行情 K 线"])
+
+    with tab_trades:
+        st.subheader("上传 TradingView 回放交易 CSV")
+        st.caption(
+            "列名需包含 `日期和时间、类型、交易编号、信号、价格 USD、大小（数量）、"
+            "净损益 USD、回报 %、手续费 USD、有利波动 USD、有利波动 %、不利波动 USD、"
+            "不利波动 %、持续时间（K线）、累计损益 USD`。可参考 `sample_data/sample_trades.csv`。"
+        )
+        up = st.file_uploader("选择 CSV 文件", type=["csv"], key="trades_upload")
+        if up is not None and st.button("解析并保存", key="btn_parse"):
+            path = save_upload(up, "uploaded_trades.csv")
+            try:
+                n = parse_replay_trades.parse(path, TRADES_CSV)
+                st.cache_data.clear()
+                st.success(f"已解析 {n} 笔交易，保存到 `data/replay_trades_parsed.csv`。")
+            except Exception as exc:
+                st.error(f"解析失败：{exc}")
+
+    with tab_klines:
+        st.subheader("方式一：上传 1 分钟行情 CSV")
+        st.caption(
+            "列名需包含 `DateTime, Open, High, Low, Close, Volume`。"
+            "可参考 `sample_data/sample_1min.csv`。"
+        )
+        up1 = st.file_uploader("选择 1 分钟 CSV", type=["csv"], key="kline_upload")
+        if up1 is not None and st.button("生成 5/15/60 分钟数据", key="btn_prep"):
+            path = save_upload(up1, "uploaded_1min.csv")
+            try:
+                prepare_intraday(path, "MES", CSV_DIR, QLIB_BASE)
+                st.cache_data.clear()
+                st.cache_resource.clear()
+                st.success("已生成 5/15/60 分钟 Qlib 数据，去「交易」页查看。")
+            except Exception as exc:
+                st.error(f"生成失败：{exc}")
+
+        st.divider()
+        st.subheader("方式二：从 TradingView 拉取（通过 QuantData）")
+        st.caption("需要本机运行 TradingView Desktop + TradingView MCP（tv CLI）。历史 intraday 走回放模式，长区间会慢一些。")
+        with st.form("tv_fetch_form"):
+            c1, c2 = st.columns(2)
+            symbol = c1.text_input("TradingView 品种", value="MES1!")
+            timeframe = c2.selectbox("周期", ["5m", "15m", "60m", "1d"])
+            c3, c4 = st.columns(2)
+            start = c3.date_input("开始日期", value=date.today() - timedelta(days=7))
+            end = c4.date_input("结束日期", value=date.today())
+            submitted = st.form_submit_button("拉取并生成 Qlib")
+        if submitted:
+            with st.spinner("正在从 TradingView 拉取…"):
+                try:
+                    n = fetch_and_store(symbol, timeframe, start, end, CSV_DIR, QLIB_BASE)
+                    st.cache_data.clear()
+                    st.cache_resource.clear()
+                    if n:
+                        st.success(f"已拉取 {n} 根 {timeframe} K 线并生成 Qlib 数据。")
+                    else:
+                        st.warning("没拉到数据：历史 intraday 可能不在可用范围。")
+                except Exception as exc:
+                    st.error(f"拉取失败：{exc}")
+
+
 # ───────────────────────────────────────────────
 # 侧边栏
 # ───────────────────────────────────────────────
-def sidebar(trades: pd.DataFrame):
+def sidebar(trades: pd.DataFrame | None):
     st.sidebar.title("📈 MES 复盘")
 
     # 页面导航
     st.sidebar.markdown("### 页面")
-    nav_cols = st.sidebar.columns(2)
+    nav_cols = st.sidebar.columns(3)
     if nav_cols[0].button("📊 总结", use_container_width=True, type=("primary" if st.session_state.page == "summary" else "secondary")):
         st.session_state.page = "summary"
         st.rerun()
     if nav_cols[1].button("📈 交易", use_container_width=True, type=("primary" if st.session_state.page == "detail" else "secondary")):
         st.session_state.page = "detail"
         st.rerun()
+    if nav_cols[2].button("🛠 数据", use_container_width=True, type=("primary" if st.session_state.page == "data" else "secondary")):
+        st.session_state.page = "data"
+        st.rerun()
 
     st.sidebar.divider()
 
     # 交易列表（仅在交易页显示完整列表，总结页可隐藏）
-    if st.session_state.page == "detail":
+    if st.session_state.page == "detail" and trades is not None and not trades.empty:
         st.sidebar.markdown("### 交易列表")
         for _, row in trades.iterrows():
             icon = "✅" if row["pnl_usd"] > 0 else "❌"
@@ -348,13 +445,23 @@ def main():
     if "bars_after" not in st.session_state:
         st.session_state.bars_after = 50
 
-    trades = load_trades()
+    trades = load_trades() if TRADES_CSV.exists() else None
     sidebar(trades)
 
-    if st.session_state.page == "summary":
-        summary_page(trades)
+    if st.session_state.page == "data":
+        data_page()
+    elif st.session_state.page == "detail":
+        if trades is None or trades.empty:
+            st.info("还没有交易数据，请先在「🛠 数据」页上传回放交易 CSV。")
+            data_page()
+        else:
+            detail_page(trades)
     else:
-        detail_page(trades)
+        if trades is None or trades.empty:
+            st.info("还没有交易数据，请先在「🛠 数据」页上传回放交易 CSV。")
+            data_page()
+        else:
+            summary_page(trades)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,8 @@
 - **图表**：权益曲线、盈亏分布、时段胜率（亚盘/欧盘/美盘）、MAE/MFE 散点
 - **单笔交易详情**：方向、进场/出场价与信号、MFE/MAE、持仓时长，并同步加载
   **5 / 15 / 60 分钟** K 线，进场/出场点用三角形标注
+- **数据管理页（UI）**：上传回放交易 CSV、上传 1 分钟行情、或从 TradingView
+  拉取 K 线，全程不用命令行
 
 ## 环境要求
 
@@ -45,6 +47,15 @@ streamlit run app.py
 
 ## 用自己的数据
 
+最快的方式是**直接在界面里操作**：启动面板后，点左侧「🛠 数据」页，
+可以：
+
+- 上传 TradingView 回放交易 CSV，一键解析；
+- 上传 1 分钟行情 CSV，一键生成 5/15/60 分钟 K 线；
+- 或填品种/周期/日期，通过 QuantData 从 TradingView 拉取 K 线。
+
+（如果更习惯命令行，也可以用下面的脚本，效果一样。）
+
 需要两个 TradingView 导出的 CSV：
 
 1. **回放交易记录 CSV**，列名需包含：
@@ -72,7 +83,8 @@ streamlit run app.py
 ## 从 TradingView 拉取缺失数据（通过 QuantData）
 
 当某笔交易的 K 线数据不在本地时，面板会提示你可以用 QuantData 从 TradingView
-拉取。命令：
+拉取。在界面上：进「🛠 数据」→「行情 K 线」→「方式二：从 TradingView 拉取」，
+填好品种、周期、日期即可。命令行等价于：
 
 ```bash
 python3 scripts/fetch_tv_data.py --symbol MES1! --timeframe 5m \
@@ -82,11 +94,9 @@ python3 scripts/fetch_tv_data.py --symbol MES1! --timeframe 5m \
 它会调用 QuantData 的 `tradingview` provider，把拉到的 K 线合并进
 `data/csv_intraday/` 并重建 Qlib 数据，刷新面板即可看到。
 
-> ⚠️ **重要限制**：TradingView MCP 只能拿到**最近约 2 个交易日、约 300 根**
-> 的 intraday K 线，**历史区间拉不到**。所以：
-> - 最近 1~2 天的交易 → 可以用本命令从 TV 拉取；
-> - 更早的交易 → 仍需要用本地 1 分钟行情生成（上一节的
->   `prepare_mes_intraday_qlib.py`）。
+> 说明：最近的数据直接走 `ohlcv`；历史 intraday 会自动切到 TradingView 的
+> **K 线回放模式**按天分页拉取，所以长区间会慢一些，拉取期间会临时切换图表
+> 到回放模式、结束后恢复。
 >
 > 另外，拉取需要本机装好 TradingView Desktop、Node.js 和 TradingView MCP 的
 > `tv` CLI（默认路径 `~/.claude/tradingview-mcp/src/cli/index.js`，可用
@@ -116,7 +126,7 @@ python3 scripts/fetch_tv_data.py --symbol MES1! --timeframe 5m \
 ## 常见问题
 
 - **`pyqlib` / `numpy` 安装失败**：先 `pip install --upgrade pip`，或换 Python 3.9/3.10 重新建虚拟环境。
-- **K 线加载为空**：先用示例数据确认能跑（`bash scripts/run_demo.sh`）；如果是自己的数据，用 `prepare_mes_intraday_qlib.py` 生成，或对最近 1~2 天的交易用 `fetch_tv_data.py` 从 TradingView 拉取。
+- **K 线加载为空**：先在「🛠 数据」页上传/拉取对应的行情数据；或先用示例数据确认能跑（`bash scripts/run_demo.sh`）。
 - **出现「交易价格与 K 线不完全匹配」黄色警告**：通常是因为数据源或合约连续方式不同，属于提示，不影响查看。
 - **macOS 多进程报错**：脚本里已内置线程模式，一般无需额外处理。
 

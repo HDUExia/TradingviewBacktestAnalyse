@@ -98,3 +98,36 @@ def fetch_tradingview_bars(
     df["date"] = pd.to_datetime(df["timestamp"], unit="s", utc=True).dt.tz_convert(None)
     df["symbol"] = qlib_symbol
     return df[columns].sort_values("date").reset_index(drop=True)
+
+
+def fetch_and_store(
+    symbol: str,
+    timeframe: str,
+    start: date,
+    end: date,
+    csv_dir: Path,
+    qlib_base: Path,
+    count: int = 300,
+) -> int:
+    """从 TradingView 拉取 K 线，合并进本地 CSV 并重建 Qlib，返回新增根数。"""
+    freq = TIMEFRAME_TO_FREQ.get(timeframe, timeframe + "min")
+    qlib_symbol = symbol.replace("1!", "").replace("#", "").upper()
+
+    df = fetch_tradingview_bars(symbol, timeframe, start, end, count)
+    if df.empty:
+        return 0
+
+    out_dir = csv_dir / freq
+    out_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = out_dir / f"{qlib_symbol}.csv"
+    if csv_path.exists():
+        old = pd.read_csv(csv_path)
+        old["date"] = pd.to_datetime(old["date"])
+        merged = pd.concat([old, df], ignore_index=True)
+    else:
+        merged = df
+    merged = merged.drop_duplicates(subset=["date"], keep="last").sort_values("date")
+    merged.to_csv(csv_path, index=False)
+
+    write_qlib(merged, freq, qlib_symbol, qlib_base)
+    return len(df)
