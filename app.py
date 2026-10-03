@@ -697,8 +697,6 @@ def detail_page(trades: pd.DataFrame):
 # 主入口
 # ───────────────────────────────────────────────
 def main():
-    st.markdown(_CSS, unsafe_allow_html=True)
-
     # session state 默认值
     settings = load_settings()
     if "page" not in st.session_state:
@@ -711,6 +709,11 @@ def main():
         st.session_state.timezone = settings.get("timezone", "UTC")
     if "ind_instances" not in st.session_state:
         st.session_state.ind_instances = settings.get("ind_instances", [])
+
+    # 注入主题 CSS；非交易页隐藏侧边栏
+    st.markdown(_CSS, unsafe_allow_html=True)
+    if st.session_state.page != "detail":
+        st.markdown("<style>[data-testid='stSidebar'] { display: none; }</style>", unsafe_allow_html=True)
 
     # 顶部应用栏
     bar = st.columns([4, 1, 1, 1, 1, 1])
@@ -730,7 +733,8 @@ def main():
     st.divider()
 
     trades = load_trades() if TRADES_CSV.exists() else None
-    _trade_table_sidebar(trades)
+    if st.session_state.page == "detail":
+        _trade_table_sidebar(trades)
 
     if st.session_state.page == "data":
         data_page()
