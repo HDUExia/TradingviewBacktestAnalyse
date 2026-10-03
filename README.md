@@ -1,58 +1,97 @@
 # TradingviewBacktestAnalyse
 
-把 TradingView 导出的**回放交易记录**解析成单笔交易，并用 Streamlit 做交互式复盘的面板。
+把 TradingView 的**回放交易记录**可视化复盘的面板。仓库自带一份示例数据，
+你 clone 下来跑几条命令就能看到效果，不用先准备自己的行情。
 
 ## 功能
 
 - **汇总指标卡**：总交易数、胜率、盈亏比、总盈亏、最大回撤、夏普、平均持仓时间
-- **可视化图表**：权益曲线、盈亏分布、时段胜率（亚盘/欧盘/美盘）、MAE/MFE 散点
-- **单笔交易详情**：方向、进场/出场价与信号、MFE/MAE、持仓时长，并同步加载该时间窗口的 **5 / 15 / 60 分钟** K 线
-- K 线使用 **TradingView Lightweight Charts** 渲染，进场/出场点用三角形标注，持仓区间用半透明底色标出
+- **图表**：权益曲线、盈亏分布、时段胜率（亚盘/欧盘/美盘）、MAE/MFE 散点
+- **单笔交易详情**：方向、进场/出场价与信号、MFE/MAE、持仓时长，并同步加载
+  **5 / 15 / 60 分钟** K 线，进场/出场点用三角形标注
+
+## 环境要求
+
+- Python 3.9+（推荐 3.9 ~ 3.12）
+- 其余依赖在 `requirements.txt` 里，下面一步装好
+
+## 快速开始（4 条命令）
+
+```bash
+# 1) 克隆并进入
+git clone git@github.com:HDUExia/TradingviewBacktestAnalyse.git
+cd TradingviewBacktestAnalyse
+
+# 2) 建虚拟环境并安装依赖
+python3 -m venv venv
+source venv/bin/activate          # Windows 用: venv\Scripts\activate
+pip install -r requirements.txt
+
+# 3) 一键生成示例数据（示例行情 + 4 笔示例交易，并转成 Qlib 数据）
+bash scripts/run_demo.sh
+
+# 4) 启动面板
+streamlit run app.py
+```
+
+浏览器打开 `http://localhost:8501` 即可看到面板。
+
+> `run_demo.sh` 会生成 `sample_data/` 下的示例数据，并输出到 `data/`（已加入
+> `.gitignore`）。想换成自己的数据，看下一节。
+
+## 用自己的数据
+
+需要两个 TradingView 导出的 CSV：
+
+1. **回放交易记录 CSV**，列名需包含：
+   `日期和时间、类型、交易编号、信号、价格 USD、大小（数量）、净损益 USD、
+   回报 %、手续费 USD、有利波动 USD、有利波动 %、不利波动 USD、不利波动 %、
+   持续时间（K线）、累计损益 USD`。
+   仓库里的 [`sample_data/sample_trades.csv`](sample_data/sample_trades.csv) 就是标准样例。
+2. **1 分钟行情 CSV**，至少包含 `DateTime, Open, High, Low, Close, Volume`。
+   见 [`sample_data/sample_1min.csv`](sample_data/sample_1min.csv)。
+
+然后执行：
+
+```bash
+# 解析回放交易 → data/replay_trades_parsed.csv
+python3 scripts/parse_replay_trades.py --input "你的回放交易.csv"
+
+# 1 分钟行情 → 5/15/60 分钟 CSV + Qlib 数据
+python3 scripts/prepare_mes_intraday_qlib.py --input "你的1分钟行情.csv" --symbol MES
+
+streamlit run app.py
+```
+
+`--symbol` 默认是 `MES`，按你的品种改即可。
 
 ## 目录结构
 
 ```
 ├── app.py                          # 复盘面板（Streamlit 入口）
 ├── chart_lwc.py                    # Lightweight Charts K 线渲染
+├── sample_data/                    # 示例行情与示例交易（可开箱体验）
 ├── scripts/
+│   ├── run_demo.sh                 # 一键生成示例数据并初始化
+│   ├── generate_sample_data.py     # 生成示例数据
 │   ├── parse_replay_trades.py      # 解析回放交易 CSV → 单笔交易
-│   ├── prepare_mes_intraday_qlib.py# 1 分钟 CSV → 5/15/60 分钟 CSV + Qlib
+│   ├── prepare_mes_intraday_qlib.py# 1 分钟行情 → 5/15/60 分钟 CSV + Qlib
 │   ├── verify_mes_5min.py          # 校验 Qlib 分钟数据覆盖交易时段
 │   └── test_app_logic.py           # 不启动服务，测试面板核心逻辑
 └── docs/
-    └── replay_analyzer.md          # 使用说明
+    └── replay_analyzer.md          # 更详细的使用说明
 ```
 
-## 快速开始
+## 常见问题
 
-```bash
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
+- **`pyqlib` / `numpy` 安装失败**：先 `pip install --upgrade pip`，或换 Python 3.9/3.10 重新建虚拟环境。
+- **K 线加载为空**：先运行 `bash scripts/run_demo.sh`，或用 `prepare_mes_intraday_qlib.py` 重新生成 Qlib 数据。
+- **出现「交易价格与 K 线不完全匹配」黄色警告**：通常是因为数据源或合约连续方式不同，属于提示，不影响查看。
+- **macOS 多进程报错**：脚本里已内置线程模式，一般无需额外处理。
 
-准备数据（面板依赖 `data/replay_trades_parsed.csv` 和 Qlib 分钟数据）：
+## 许可证
 
-```bash
-# 解析 TradingView 回放交易 CSV
-python scripts/parse_replay_trades.py --input "回放交易_xxx.csv"
-
-# 用 1 分钟行情重采样生成 5/15/60 分钟 CSV + Qlib
-python scripts/prepare_mes_intraday_qlib.py --input "@MES#C_1min_xxx.csv" --symbol MES
-```
-
-启动：
-
-```bash
-streamlit run app.py
-```
-
-浏览器打开 `http://localhost:8501`（或终端提示的端口）。详细说明见 [docs/replay_analyzer.md](docs/replay_analyzer.md)。
-
-## 数据说明
-
-- 面板通过 **Qlib** 加载 K 线，`data/qlib_data/` 为脚本生成的二进制，默认不纳入版本库。
-- 回放交易 CSV 与 1 分钟行情 CSV 属于你的本地/个人数据，请自行准备，不要提交到仓库。
+[Apache License 2.0](LICENSE)，作者与项目地址见 [NOTICE](NOTICE)。
 
 ## 免责声明
 
