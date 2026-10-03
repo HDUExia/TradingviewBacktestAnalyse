@@ -132,10 +132,13 @@ data/                        # 运行期数据（gitignore，不提交）
 
 ### 评论输入
 
-- 用原生 `st.form` + `st.text_area` + `st.file_uploader(accept_multiple_files=True)`。
-- 评论结构仍是 segments（文字段 + 图片段），图片按上传顺序追加在文字后。
-- 历史说明：曾用 `declare_component` 自定义富文本组件支持 Ctrl+V 粘贴图片，但因
-  iframe 反复重渲染导致输入框闪烁、无法输入，已改回原生组件（可靠，但不支持剪贴板粘贴）。
+- 用 `components.declare_component` 自定义组件（`components/rich_comment/index.html`），
+  支持 Ctrl/Cmd+V 粘贴图片、图文混排；提交时 `setComponentValue(JSON 数组)`，Python 端
+  解析 segments（base64 图片落盘）。
+- 组件 JS 必须遵循 Streamlit 组件生命周期：监听 `Streamlit.RENDER_EVENT` 并在其中
+  `setFrameHeight`，最后再 `setComponentReady()`；否则 iframe 会反复重渲染导致输入框
+  闪烁、无法输入（这是踩过的坑）。
+- Python 端用 `last_rich_comment_{trade_id}` session_state 去重，避免重复处理同一条提交。
 
 ## 6. 关键设计决策
 
