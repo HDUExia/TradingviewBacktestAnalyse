@@ -11,7 +11,6 @@ MES 回放交易分析面板 v3
 """
 from __future__ import annotations
 
-import base64
 import io
 import json
 import sys
@@ -45,12 +44,6 @@ import indicators  # noqa: E402
 import markdown_io  # noqa: E402
 
 st.set_page_config(page_title="MES 回放交易分析", layout="wide", initial_sidebar_state="expanded")
-
-_rich_comment = components.declare_component(
-    "rich_comment",
-    path=str(ROOT / "components" / "rich_comment"),
-)
-
 
 _CSS = """
 <style>
@@ -232,35 +225,6 @@ def save_settings() -> None:
     SETTINGS_JSON.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _process_comment_segments(segments: list[dict], trade_id: int) -> list[dict]:
-    """把编辑器返回的 base64 图片落盘、替换为本地路径，并合并相邻文本段。"""
-    out = []
-    for seg in segments:
-        if seg.get("type") == "image":
-            src = seg.get("src", "")
-            if src.startswith("data:"):
-                meta, b64 = src.split(",", 1)
-                ext = meta.split(";")[0].split("/")[-1] or "png"
-                if ext not in ("png", "jpg", "jpeg", "gif", "webp"):
-                    ext = "png"
-                UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-                dest = UPLOADS_DIR / f"c{trade_id}_{uuid.uuid4().hex}.{ext}"
-                dest.write_bytes(base64.b64decode(b64))
-                out.append({"type": "image", "path": str(dest)})
-            else:
-                out.append({"type": "image", "path": src})
-        else:
-            out.append({"type": "text", "text": seg.get("text", "")})
-
-    merged = []
-    for seg in out:
-        if merged and merged[-1]["type"] == "text" and seg["type"] == "text":
-            merged[-1]["text"] += seg["text"]
-        else:
-            merged.append(seg)
-    return merged
-
-
 def prepare_intraday(input_path: Path, symbol: str, csv_dir: Path) -> None:
     """1 分钟 CSV → 5/15/60 分钟 CSV。"""
     df_1m = prep.load_1min(input_path, symbol)
@@ -400,7 +364,7 @@ def data_page():
         else:
             start, end = rng
             st.info(f"自动判定的拉取区间：**{start} ~ {end}**（{(end - start).days} 天）")
-        if st.button("🚀 开始拉取", type="primary", use_container_width=True, disabled=(rng is None)):
+        if st.button("🚀 开始拉取", type="primary", width="stretch", disabled=(rng is None)):
             start, end = rng
             with st.spinner(f"正在拉取 {symbol} {start} ~ {end} 的 5 分钟数据（历史区间走回放模式，可能较慢）…"):
                 try:
@@ -447,7 +411,7 @@ def _trade_table_sidebar(trades: pd.DataFrame | None):
         sign = "+" if row["pnl_usd"] > 0 else ""
         label = f"{icon} #{tid} {direction_cn} {sign}${row['pnl_usd']:.2f}"
         btn_type = "primary" if tid == current else "secondary"
-        if st.sidebar.button(label, key=f"trade_btn_{tid}", use_container_width=True, type=btn_type):
+        if st.sidebar.button(label, key=f"trade_btn_{tid}", width="stretch", type=btn_type):
             st.session_state.selected_trade_id = tid
             st.session_state.page = "detail"
             st.rerun()
@@ -485,7 +449,7 @@ def _indicators_ui():
             key="ind_new_type",
         )
     with c2:
-        if st.button("添加", use_container_width=True, key="ind_add_btn"):
+        if st.button("添加", width="stretch", key="ind_add_btn"):
             used = {inst.get("color") for inst in instances}
             instances.append({
                 "id": uuid.uuid4().hex,
@@ -512,7 +476,7 @@ def _indicators_ui():
                     key=f"indcolor_{inst['id']}",
                     label_visibility="collapsed",
                 )
-            if cd.button("删除", key=f"ind_del_{inst['id']}", use_container_width=True):
+            if cd.button("删除", key=f"ind_del_{inst['id']}", width="stretch"):
                 st.session_state.ind_instances = [x for x in instances if x["id"] != inst["id"]]
                 st.rerun()
             params = {}
@@ -551,13 +515,13 @@ def summary_page(trades: pd.DataFrame):
         equity = (1 + trades["return_pct"] / 100).cumprod()
         fig = go.Figure(go.Scatter(x=trades["exit_time"], y=equity, mode="lines", line=dict(color="#26a69a", width=2), fill="tozeroy", fillcolor="rgba(38, 166, 154, 0.1)"))
         fig.update_layout(height=300, margin=dict(l=20, r=20, t=30, b=20), paper_bgcolor="#131722", plot_bgcolor="#131722", font_color="#d1d4dc", xaxis_gridcolor="#1e222d", yaxis_gridcolor="#1e222d")
-        st.plotly_chart(fig, use_container_width=True, key="equity_curve")
+        st.plotly_chart(fig, width="stretch", key="equity_curve")
 
     with col_right:
         st.subheader("盈亏分布")
         fig = px.histogram(trades, x="pnl_usd", nbins=20, color="win", color_discrete_map={True: "#26a69a", False: "#ef5350"})
         fig.update_layout(height=300, margin=dict(l=20, r=20, t=30, b=20), paper_bgcolor="#131722", plot_bgcolor="#131722", font_color="#d1d4dc", xaxis_gridcolor="#1e222d", yaxis_gridcolor="#1e222d", showlegend=False)
-        st.plotly_chart(fig, use_container_width=True, key="pnl_hist")
+        st.plotly_chart(fig, width="stretch", key="pnl_hist")
 
     col_left2, col_right2 = st.columns(2)
 
@@ -566,7 +530,7 @@ def summary_page(trades: pd.DataFrame):
         session_stats = trades.groupby("session").agg(win_rate=("win", "mean"), count=("win", "size")).reset_index()
         fig = go.Figure(go.Bar(x=session_stats["session"], y=session_stats["win_rate"]*100, marker_color=["#26a69a" if v >= 0.5 else "#ef5350" for v in session_stats["win_rate"]], text=session_stats["count"], textposition="auto"))
         fig.update_layout(height=300, margin=dict(l=20, r=20, t=30, b=20), paper_bgcolor="#131722", plot_bgcolor="#131722", font_color="#d1d4dc", xaxis_gridcolor="#1e222d", yaxis_gridcolor="#1e222d", yaxis=dict(ticksuffix="%"))
-        st.plotly_chart(fig, use_container_width=True, key="session_winrate")
+        st.plotly_chart(fig, width="stretch", key="session_winrate")
 
     with col_right2:
         st.subheader("MAE/MFE 散点")
@@ -574,13 +538,13 @@ def summary_page(trades: pd.DataFrame):
         fig.add_hline(y=0, line_dash="dash", line_color="gray")
         fig.add_vline(x=0, line_dash="dash", line_color="gray")
         fig.update_layout(height=300, margin=dict(l=20, r=20, t=30, b=20), paper_bgcolor="#131722", plot_bgcolor="#131722", font_color="#d1d4dc", xaxis_gridcolor="#1e222d", yaxis_gridcolor="#1e222d")
-        st.plotly_chart(fig, use_container_width=True, key="mae_mfe")
+        st.plotly_chart(fig, width="stretch", key="mae_mfe")
 
     st.divider()
     st.subheader("交易明细")
     display_df = trades[["trade_id", "direction", "entry_time", "exit_time", "pnl_usd", "return_pct", "duration_minutes", "mfe_usd", "mae_usd", "session"]].copy()
     display_df["结果"] = display_df["pnl_usd"].apply(lambda x: "✅ 盈" if x > 0 else "❌ 亏")
-    st.dataframe(display_df, use_container_width=True)
+    st.dataframe(display_df, width="stretch")
 
     st.divider()
     st.subheader("📦 导出 Markdown 报告")
@@ -591,7 +555,7 @@ def summary_page(trades: pd.DataFrame):
         data=report,
         file_name="tba_report.md",
         mime="text/markdown",
-        use_container_width=True,
+        width="stretch",
     )
 
 
@@ -611,11 +575,11 @@ def detail_page(trades: pd.DataFrame):
     header_cols = st.columns([5, 1, 1])
     header_cols[0].header(f"交易 #{selected_id} 详情")
     with header_cols[1]:
-        if st.button("◀ 上一笔", use_container_width=True, disabled=(idx == 0)):
+        if st.button("◀ 上一笔", width="stretch", disabled=(idx == 0)):
             st.session_state.selected_trade_id = int(ids[idx - 1])
             st.rerun()
     with header_cols[2]:
-        if st.button("下一笔 ▶", use_container_width=True, disabled=(idx >= len(ids) - 1)):
+        if st.button("下一笔 ▶", width="stretch", disabled=(idx >= len(ids) - 1)):
             st.session_state.selected_trade_id = int(ids[idx + 1])
             st.rerun()
 
@@ -707,19 +671,31 @@ def detail_page(trades: pd.DataFrame):
                 if img_path and Path(img_path).exists():
                     st.image(str(img_path), width=460)
 
-    # 富文本评论编辑器（支持粘贴图片、图文混排）
-    raw = _rich_comment(key=f"rich_comment_{selected_id}", default=None)
-    last_key = f"last_rich_comment_{selected_id}"
-    if raw and st.session_state.get(last_key) != raw:
-        st.session_state[last_key] = raw
-        try:
-            segs = json.loads(raw)
-            processed = _process_comment_segments(segs, int(selected_id))
-            if processed:
-                add_comment(int(selected_id), processed)
-        except Exception as exc:
-            st.error(f"发布评论失败：{exc}")
-        st.rerun()
+    # 评论输入（原生表单，支持多图）
+    with st.form("comment_form", clear_on_submit=True):
+        text = st.text_area("写评论…", key="comment_text", height=120, placeholder="例如：这里进场偏早，应该等二次确认…")
+        images = st.file_uploader(
+            "贴图（可多张，按顺序追加在文字后）",
+            type=["png", "jpg", "jpeg", "gif", "webp"],
+            accept_multiple_files=True,
+            key="comment_imgs",
+        )
+        submitted = st.form_submit_button("发布评论")
+    if submitted:
+        if not text.strip() and not images:
+            st.warning("评论内容不能为空。")
+        else:
+            segments = []
+            if text.strip():
+                segments.append({"type": "text", "text": text.strip()})
+            for img in (images or []):
+                UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+                ext = Path(img.name).suffix or ".png"
+                dest = UPLOADS_DIR / f"c{selected_id}_{uuid.uuid4().hex}{ext}"
+                dest.write_bytes(img.getvalue())
+                segments.append({"type": "image", "path": str(dest)})
+            add_comment(int(selected_id), segments)
+            st.rerun()
 
 
 # ───────────────────────────────────────────────
@@ -750,14 +726,14 @@ def main():
         st.markdown("### 📈 复盘分析")
     for i, (page, label) in enumerate([("summary", "总结"), ("detail", "交易"), ("data", "数据")]):
         with bar[1 + i]:
-            if st.button(label, use_container_width=True, type="primary" if st.session_state.page == page else "secondary"):
+            if st.button(label, width="stretch", type="primary" if st.session_state.page == page else "secondary"):
                 st.session_state.page = page
                 st.rerun()
     with bar[4]:
-        with st.popover("设置", use_container_width=True):
+        with st.popover("设置", width="stretch"):
             _settings_ui()
     with bar[5]:
-        with st.popover("指标", use_container_width=True):
+        with st.popover("指标", width="stretch"):
             _indicators_ui()
     st.divider()
 
