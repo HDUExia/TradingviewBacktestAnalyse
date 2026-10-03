@@ -89,7 +89,8 @@ data/                        # 运行期数据（gitignore，不提交）
 
 ### 主题 / 样式
 
-- `.streamlit/config.toml`：Google 风格主题（主色 `#1a73e8`、浅色背景、无衬线字体）。
+- `.streamlit/config.toml`：**深色主题**（背景 `#0e1117`、文字 `#e6e6e6`、主色 `#4c8bf5`），
+  与 K 线图/汇总图的深色 `#131722` 保持一致。
 - `app.py` 顶部 `_CSS`：隐藏 Streamlit 默认 header/footer/菜单和侧边栏，圆角按钮/卡片/metric、Material 风格按钮。
 - 修改 UI 样式只改 `_CSS` 或 `config.toml`，不要散落各处。
 

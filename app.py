@@ -55,30 +55,25 @@ _CSS = """
 #MainMenu, footer, header[data-testid="stHeader"] { visibility: hidden; height: 0; }
 [data-testid="stSidebar"] { display: none; }
 .block-container { padding-top: 1.2rem; padding-bottom: 3rem; max-width: 1500px; }
-html, body, .stApp, [class*="css"] {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  color: #202124;
-}
 .stButton > button {
   border-radius: 8px;
-  border: 1px solid #dadce0;
-  background: #ffffff;
-  color: #1a73e8;
+  border: 1px solid #30363d;
+  background: #1f2430;
+  color: #e6e6e6;
   font-weight: 500;
   transition: background .15s, box-shadow .15s;
 }
-.stButton > button:hover { background: #f1f3f4; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
-.stButton > button[kind="primary"] { background: #1a73e8; color: #fff; border: none; }
-.stButton > button[kind="primary"]:hover { background: #1765cc; }
+.stButton > button:hover { background: #2a303c; box-shadow: 0 1px 2px rgba(0,0,0,.4); }
+.stButton > button[kind="primary"] { background: #4c8bf5; color: #fff; border: none; }
+.stButton > button[kind="primary"]:hover { background: #3a79e0; }
 [data-testid="stVerticalBlockBorderWrapper"] {
-  background: #ffffff; border-radius: 12px; border: 1px solid #e8eaed;
-  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  background: #161b26; border-radius: 12px; border: 1px solid #262d3a;
 }
-[data-testid="stExpander"] { border-radius: 8px; border: 1px solid #e8eaed; background: #ffffff; }
+[data-testid="stExpander"] { border-radius: 8px; border: 1px solid #262d3a; background: #161b26; }
 [data-testid="stMetric"] {
-  background: #ffffff; border-radius: 10px; border: 1px solid #e8eaed; padding: 12px 14px;
+  background: #161b26; border-radius: 10px; border: 1px solid #262d3a; padding: 12px 14px;
 }
-h1, h2, h3 { color: #202124; letter-spacing: -0.01em; }
+h1, h2, h3 { letter-spacing: -0.01em; }
 </style>
 """
 
