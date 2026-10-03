@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { margin: 0; background: #0e1117; color: #fafafa; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  #wrap { padding: 8px; }
+  #editor {
+    min-height: 120px; max-height: 340px; overflow-y: auto;
+    border: 1px solid #2a2e39; border-radius: 8px; padding: 10px;
+    background: #131722; color: #e6e6e6; outline: none; line-height: 1.6;
+    white-space: pre-wrap;
+  }
+  #editor img { max-width: 100%; max-height: 300px; border-radius: 4px; margin: 6px 0; display: block; }
+  #editor:empty::before { content: attr(data-placeholder); color: #6b7280; }
+  #btns { margin-top: 8px; display: flex; gap: 10px; align-items: center; }
+  button { padding: 7px 16px; background: #2563eb; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  #hint { color: #6b7280; font-size: 12px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="editor" contenteditable="true" data-placeholder="输入文字，可直接粘贴图片（Ctrl/Cmd+V）…"></div>
+  <div id="btns">
+    <button id="submit">发布评论</button>
+    <span id="hint">支持图文混排，粘贴的图片按位置插入</span>
+  </div>
+</div>
+<script>
+  const editor = document.getElementById('editor');
+  const submit = document.getElementById('submit');
+
+  editor.addEventListener('paste', (e) => {
+    const items = (e.clipboardData || window.clipboardData).items;
+    for (const item of items) {
+      if (item.kind === 'file' && item.type && item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = document.createElement('img');
+          img.src = reader.result;
+          const sel = window.getSelection();
+          if (sel.rangeCount) {
+            const range = sel.getRangeAt(0);
+            range.deleteContents();
+            range.insertNode(img);
+            range.setStartAfter(img);
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          } else {
+            editor.appendChild(img);
+          }
+        };
+        reader.readAsDataURL(file);
+        return;
+      }
+    }
+  });
+
+  function serialize(node) {
+    const segs = [];
+    function walk(n) {
+      for (const child of n.childNodes) {
+        if (child.nodeType === Node.TEXT_NODE) {
+          const t = child.textContent.replace(/\u00a0/g, ' ');
+          if (t !== '') segs.push({ type: 'text', text: t });
+        } else if (child.nodeType === Node.ELEMENT_NODE) {
+          if (child.tagName === 'IMG') {
+            segs.push({ type: 'image', src: child.src });
+          } else if (child.tagName === 'BR') {
+            segs.push({ type: 'text', text: '\n' });
+          } else {
+            walk(child);
+            if (child.tagName === 'DIV' || child.tagName === 'P') {
+              segs.push({ type: 'text', text: '\n' });
+            }
+          }
+        }
+      }
+    }
+    walk(node);
+    while (segs.length && segs[segs.length - 1].type === 'text' && segs[segs.length - 1].text.trim() === '') {
+      segs.pop();
+    }
+    return segs;
+  }
+
+  submit.addEventListener('click', () => {
+    const segs = serialize(editor);
+    if (!segs.length || segs.every(s => s.type === 'text' && s.text.trim() === '')) {
+      return;
+    }
+    submit.disabled = true;
+    Streamlit.setComponentValue(JSON.stringify(segs));
+  });
+
+  // 固定高度，只在加载后设置一次
+  setTimeout(() => {
+    Streamlit.setFrameHeight(320);
+  }, 0);
+  Streamlit.setComponentReady();
+</script>
+</body>
+</html>
