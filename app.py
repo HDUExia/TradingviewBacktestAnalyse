@@ -42,7 +42,7 @@ import prepare_mes_intraday as prep  # noqa: E402
 from chart_data import fetch_and_store, symbol_name  # noqa: E402
 import indicators  # noqa: E402
 
-st.set_page_config(page_title="MES 回放交易分析", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="MES 回放交易分析", layout="wide", initial_sidebar_state="expanded")
 
 _rich_comment = components.declare_component(
     "rich_comment",
@@ -53,7 +53,6 @@ _rich_comment = components.declare_component(
 _CSS = """
 <style>
 #MainMenu, footer, header[data-testid="stHeader"] { visibility: hidden; height: 0; }
-[data-testid="stSidebar"] { display: none; }
 .block-container { padding-top: 1.2rem; padding-bottom: 3rem; max-width: 1500px; }
 .stButton > button {
   border-radius: 8px;
@@ -417,6 +416,41 @@ def data_page():
 # ───────────────────────────────────────────────
 # 侧边栏
 # ───────────────────────────────────────────────
+def _trade_table_sidebar(trades: pd.DataFrame | None):
+    """左侧交易阅览表：点选一行跳到对应交易详情。"""
+    if trades is None or trades.empty:
+        st.sidebar.caption("暂无交易")
+        return
+    st.sidebar.markdown("### 交易列表")
+
+    show = trades[["trade_id", "direction", "entry_time", "pnl_usd"]].copy()
+    show["方向"] = show["direction"].map({"long": "多", "short": "空"})
+    show["进场"] = show["entry_time"].dt.strftime("%m-%d %H:%M")
+    show["盈亏"] = show["pnl_usd"].round(1)
+    table = show[["trade_id", "方向", "进场", "盈亏"]].rename(columns={"trade_id": "#"})
+
+    event = st.sidebar.dataframe(
+        table,
+        hide_index=True,
+        use_container_width=True,
+        on_select="rerun",
+        selection_mode="single-row",
+        key="trade_table",
+    )
+    rows = []
+    if event is not None:
+        sel = getattr(event, "selection", None)
+        if sel is not None:
+            rows = getattr(sel, "rows", []) or []
+    if rows:
+        tid = int(table.iloc[rows[0]]["#"])
+        if tid != st.session_state.get("_trade_table_last"):
+            st.session_state._trade_table_last = tid
+            st.session_state.selected_trade_id = tid
+            st.session_state.page = "detail"
+            st.rerun()
+
+
 def _settings_ui():
     st.session_state.chart_height = st.slider(
         "图表高度", 300, 900, st.session_state.get("chart_height", 560), key="setting_height"
@@ -556,25 +590,19 @@ def detail_page(trades: pd.DataFrame):
         cur = int(ids[0])
     idx = ids.index(cur)
 
-    sel, prev, nxt = st.columns([5, 1, 1])
-    with sel:
-        new_id = st.selectbox("选择交易", ids, index=idx, format_func=lambda t: f"#{t}")
-    with prev:
+    selected_id = int(st.session_state.selected_trade_id)
+    trade = trades[trades["trade_id"] == selected_id].iloc[0]
+
+    header_cols = st.columns([5, 1, 1])
+    header_cols[0].header(f"交易 #{selected_id} 详情")
+    with header_cols[1]:
         if st.button("◀ 上一笔", use_container_width=True, disabled=(idx == 0)):
             st.session_state.selected_trade_id = int(ids[idx - 1])
             st.rerun()
-    with nxt:
+    with header_cols[2]:
         if st.button("下一笔 ▶", use_container_width=True, disabled=(idx >= len(ids) - 1)):
             st.session_state.selected_trade_id = int(ids[idx + 1])
             st.rerun()
-
-    if int(new_id) != cur:
-        st.session_state.selected_trade_id = int(new_id)
-        st.rerun()
-
-    selected_id = int(st.session_state.selected_trade_id)
-    trade = trades[trades["trade_id"] == selected_id].iloc[0]
-    st.header(f"交易 #{selected_id} 详情")
 
     # 加载全量 K 线（拖动即可查看更多，无需设置前后根数）
     df_5m = load_klines("5min")
@@ -716,6 +744,7 @@ def main():
     st.divider()
 
     trades = load_trades() if TRADES_CSV.exists() else None
+    _trade_table_sidebar(trades)
 
     if st.session_state.page == "data":
         data_page()
