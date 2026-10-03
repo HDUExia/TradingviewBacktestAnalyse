@@ -24,15 +24,10 @@ import plotly.express as px
 import streamlit as st
 import streamlit.components.v1 as components
 
-import qlib
-from qlib.data import D
-from qlib.config import C
-
 from chart_lwc import render_chart
 
 ROOT = Path(__file__).resolve().parent
 TRADES_CSV = ROOT / "data" / "replay_trades_parsed.csv"
-QLIB_BASE = ROOT / "data" / "qlib_data"
 CSV_DIR = ROOT / "data" / "csv_intraday"
 COMMENTS_JSON = ROOT / "data" / "comments.json"
 UPLOADS_DIR = ROOT / "data" / "uploads"
@@ -41,30 +36,10 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import parse_replay_trades  # noqa: E402
-import prepare_mes_intraday_qlib as prep  # noqa: E402
-from chart_data import fetch_and_store, write_qlib  # noqa: E402
+import prepare_mes_intraday as prep  # noqa: E402
+from chart_data import fetch_and_store, symbol_name  # noqa: E402
 
 st.set_page_config(page_title="MES 回放交易分析", layout="wide", initial_sidebar_state="expanded")
-
-
-# ───────────────────────────────────────────────
-# 初始化
-# ───────────────────────────────────────────────
-@st.cache_resource
-def init_qlib():
-    qlib.init(
-        provider_uri={
-            "5min": str(QLIB_BASE / "futures_5min"),
-            "15min": str(QLIB_BASE / "futures_15min"),
-            "60min": str(QLIB_BASE / "futures_60min"),
-        },
-        region="us",
-    )
-    C.joblib_backend = "threading"
-    return True
-
-
-init_qlib()
 
 
 # ───────────────────────────────────────────────
@@ -91,21 +66,26 @@ def session_of_hour(h):
 
 @st.cache_data
 def load_klines(freq: str, start_dt: str, end_dt: str) -> pd.DataFrame:
-    instruments = D.instruments("all")
-    fields = ["$open", "$high", "$low", "$close", "$volume"]
-    df = D.features(instruments, fields, freq=freq)
-    df = df.rename(
-        columns={
-            "$open": "open",
-            "$high": "high",
-            "$low": "low",
-            "$close": "close",
-            "$volume": "volume",
-        }
-    )
-    df = df.reset_index()
+    """读取 data/csv_intraday/<freq>/ 下的行情 CSV，按时间窗口过滤。"""
+    columns = ["symbol", "datetime", "open", "high", "low", "close", "volume"]
+    freq_dir = CSV_DIR / freq
+    if not freq_dir.exists():
+        return pd.DataFrame(columns=columns)
+
+    frames = []
+    for csv_path in sorted(freq_dir.glob("*.csv")):
+        part = pd.read_csv(csv_path)
+        if "date" not in part.columns:
+            continue
+        part["datetime"] = pd.to_datetime(part["date"])
+        frames.append(part)
+    if not frames:
+        return pd.DataFrame(columns=columns)
+
+    df = pd.concat(frames, ignore_index=True)
+    df = df[["symbol", "datetime", "open", "high", "low", "close", "volume"]]
     df = df[(df["datetime"] >= start_dt) & (df["datetime"] <= end_dt)]
-    return df
+    return df.sort_values("datetime").reset_index(drop=True)
 
 
 # ───────────────────────────────────────────────
@@ -188,13 +168,12 @@ def add_comment(trade_id: int, text: str, image_path: str | None = None) -> None
     COMMENTS_JSON.write_text(json.dumps(comments, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def prepare_intraday(input_path: Path, symbol: str, csv_dir: Path, qlib_dir: Path) -> None:
-    """1 分钟 CSV → 5/15/60 分钟 CSV + Qlib。"""
+def prepare_intraday(input_path: Path, symbol: str, csv_dir: Path) -> None:
+    """1 分钟 CSV → 5/15/60 分钟 CSV。"""
     df_1m = prep.load_1min(input_path, symbol)
     for freq, rule in prep.FREQS.items():
         df_freq = prep.resample(df_1m, rule, symbol)
         prep.write_csv(df_freq, freq, symbol, csv_dir)
-        write_qlib(df_freq, freq, symbol, qlib_dir)
 
 
 def trades_date_range(trades_csv: Path) -> tuple[date, date] | None:
@@ -212,21 +191,20 @@ def trades_date_range(trades_csv: Path) -> tuple[date, date] | None:
 
 
 def auto_fetch_klines(symbol: str, start: date, end: date) -> int:
-    """拉取 5 分钟数据，再本地重采样出 15/60 分钟，返回 5 分钟根数。"""
-    n = fetch_and_store(symbol, "5m", start, end, CSV_DIR, QLIB_BASE)
+    """拉取 5 分钟数据，再本地重采样出 15/60 分钟 CSV，返回 5 分钟根数。"""
+    n = fetch_and_store(symbol, "5m", start, end, CSV_DIR)
     if n == 0:
         return 0
 
-    qlib_symbol = symbol.replace("1!", "").replace("#", "").upper()
-    csv5 = CSV_DIR / "5min" / f"{qlib_symbol}.csv"
+    name = symbol_name(symbol)
+    csv5 = CSV_DIR / "5min" / f"{name}.csv"
     df5 = pd.read_csv(csv5)
     df5["date"] = pd.to_datetime(df5["date"])
     df5 = df5.set_index("date").sort_index()
 
     for freq, rule in [("15min", "15min"), ("60min", "60min")]:
-        df_freq = prep.resample(df5, rule, qlib_symbol)
-        prep.write_csv(df_freq, freq, qlib_symbol, CSV_DIR)
-        write_qlib(df_freq, freq, qlib_symbol, QLIB_BASE)
+        df_freq = prep.resample(df5, rule, name)
+        prep.write_csv(df_freq, freq, name, CSV_DIR)
     return n
 
 
@@ -260,7 +238,7 @@ def data_page():
             s1.warning("交易记录：文件存在但读取失败")
     else:
         s1.warning("交易记录：无")
-    if (QLIB_BASE / "futures_5min").exists():
+    if (CSV_DIR / "5min").exists():
         s2.success("行情数据：已有 5/15/60 分钟")
     else:
         s2.warning("行情数据：无")
@@ -291,10 +269,9 @@ def data_page():
         if up1 is not None and st.button("生成 5/15/60 分钟数据", key="btn_prep"):
             path = save_upload(up1, "uploaded_1min.csv")
             try:
-                prepare_intraday(path, "MES", CSV_DIR, QLIB_BASE)
+                prepare_intraday(path, "MES", CSV_DIR)
                 st.cache_data.clear()
-                st.cache_resource.clear()
-                st.success("已生成 5/15/60 分钟 Qlib 数据，去「交易」页查看。")
+                st.success("已生成 5/15/60 分钟行情数据，去「交易」页查看。")
             except Exception as exc:
                 st.error(f"生成失败：{exc}")
 
@@ -308,15 +285,14 @@ def data_page():
             c3, c4 = st.columns(2)
             start = c3.date_input("开始日期", value=date.today() - timedelta(days=7))
             end = c4.date_input("结束日期", value=date.today())
-            submitted = st.form_submit_button("拉取并生成 Qlib")
+            submitted = st.form_submit_button("拉取并生成行情")
         if submitted:
             with st.spinner("正在从 TradingView 拉取…"):
                 try:
-                    n = fetch_and_store(symbol, timeframe, start, end, CSV_DIR, QLIB_BASE)
+                    n = fetch_and_store(symbol, timeframe, start, end, CSV_DIR)
                     st.cache_data.clear()
-                    st.cache_resource.clear()
                     if n:
-                        st.success(f"已拉取 {n} 根 {timeframe} K 线并生成 Qlib 数据。")
+                        st.success(f"已拉取 {n} 根 {timeframe} K 线并生成行情数据。")
                     else:
                         st.warning("没拉到数据：历史 intraday 可能不在可用范围。")
                 except Exception as exc:
@@ -344,7 +320,6 @@ def data_page():
                 try:
                     n = auto_fetch_klines(symbol, start, end)
                     st.cache_data.clear()
-                    st.cache_resource.clear()
                     if n:
                         st.success(f"完成：拉取 {n} 根 5 分钟 K 线，并已生成 15/60 分钟数据。去「📈 交易」页查看。")
                     else:
@@ -481,7 +456,7 @@ def detail_page(trades: pd.DataFrame):
         )
         st.markdown(
             "更早的历史交易请用本地 1 分钟行情生成："
-            "`python3 scripts/prepare_mes_intraday_qlib.py --input <1分钟行情.csv> --symbol MES`"
+            "`python3 scripts/prepare_mes_intraday.py --input <1分钟行情.csv> --symbol MES`"
         )
         return
 

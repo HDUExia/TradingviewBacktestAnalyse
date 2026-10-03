@@ -1,10 +1,9 @@
-"""通过 QuantData(QD) 从 TradingView 拉取 K 线，合并进本地 CSV 并重建 Qlib。
+"""通过 QuantData(QD) 从 TradingView 拉取 K 线，合并进本地 CSV。
 
 用法示例：
     python3 scripts/fetch_tv_data.py --symbol MES1! --timeframe 5m \
         --start 2026-10-01 --end 2026-10-02
 
-注意：TradingView 只提供最近 ~2 天的 intraday 数据，历史区间拉不到。
 """
 from __future__ import annotations
 
@@ -19,7 +18,6 @@ sys.path.insert(0, str(ROOT))
 from chart_data import fetch_and_store
 
 CSV_DIR = ROOT / "data" / "csv_intraday"
-QLIB_BASE = ROOT / "data" / "qlib_data"
 
 
 def main() -> None:
@@ -37,12 +35,11 @@ def main() -> None:
         args.start,
         args.end,
         CSV_DIR,
-        QLIB_BASE,
         args.count,
     )
     print(f"[OK] 拉取到 {n} 根 K 线")
     if n == 0:
-        print("[WARN] 没有拉到数据：TradingView 只提供最近 ~2 天的 intraday 数据。")
+        print("[WARN] 没有拉到数据，请确认 TradingView Desktop 已运行、品种和日期正确。")
 
 
 if __name__ == "__main__":

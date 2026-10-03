@@ -1,8 +1,8 @@
 """
-读取 1 分钟 CSV，重采样为 5m/15m/60m，并转成 Qlib 二进制格式。
+读取 1 分钟 CSV，重采样为 5m/15m/60m 的 CSV。
 
 用法示例：
-    python scripts/prepare_mes_intraday_qlib.py --input "@MES#C_1min_20260611.csv" --symbol MES
+    python scripts/prepare_mes_intraday.py --input "@MES#C_1min_20260611.csv" --symbol MES
 """
 import argparse
 import sys
@@ -11,14 +11,9 @@ from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
-
-from chart_data import write_qlib  # noqa: E402
-
 DEFAULT_INPUT = ROOT / "@MES#C_1min_20260611.csv"
 DEFAULT_SYMBOL = "MES"
 DEFAULT_CSV_DIR = ROOT / "data" / "csv_intraday"
-DEFAULT_QLIB_BASE = ROOT / "data" / "qlib_data"
 FREQS = {
     "5min": "5min",
     "15min": "15min",
@@ -69,11 +64,10 @@ def write_csv(df: pd.DataFrame, freq: str, symbol: str, csv_dir: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="1 分钟 CSV → 5/15/60 分钟 CSV + Qlib")
+    parser = argparse.ArgumentParser(description="1 分钟 CSV → 5/15/60 分钟 CSV")
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT, help="1 分钟 CSV 路径")
-    parser.add_argument("--symbol", default=DEFAULT_SYMBOL, help="Qlib symbol / 文件名前缀")
+    parser.add_argument("--symbol", default=DEFAULT_SYMBOL, help="symbol / 文件名前缀")
     parser.add_argument("--csv-dir", type=Path, default=DEFAULT_CSV_DIR, help="CSV 输出目录")
-    parser.add_argument("--qlib-dir", type=Path, default=DEFAULT_QLIB_BASE, help="Qlib 数据根目录")
     args = parser.parse_args()
 
     if not args.input.exists():
@@ -87,9 +81,8 @@ def main():
         print(f"\nProcessing {freq} ...")
         df_freq = resample(df_1m, rule, args.symbol)
         write_csv(df_freq, freq, args.symbol, args.csv_dir)
-        write_qlib(df_freq, freq, args.symbol, args.qlib_dir)
 
-    print("\nDone. Qlib multi-frequency data ready.")
+    print("\nDone. 5/15/60 分钟 CSV ready.")
 
 
 if __name__ == "__main__":

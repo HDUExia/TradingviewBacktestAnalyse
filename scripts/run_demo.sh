@@ -11,8 +11,8 @@ python3 scripts/parse_replay_trades.py \
   --input sample_data/sample_trades.csv \
   --output data/replay_trades_parsed.csv
 
-echo "==> 3/3 生成 5/15/60 分钟 Qlib 数据"
-python3 scripts/prepare_mes_intraday_qlib.py \
+echo "==> 3/3 生成 5/15/60 分钟行情数据"
+python3 scripts/prepare_mes_intraday.py \
   --input sample_data/sample_1min.csv \
   --symbol MES
 

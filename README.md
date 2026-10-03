@@ -30,7 +30,7 @@ python3 -m venv venv
 source venv/bin/activate          # Windows 用: venv\Scripts\activate
 pip install -r requirements.txt
 
-# 3) 一键生成示例数据（示例行情 + 4 笔示例交易，并转成 Qlib 数据）
+# 3) 一键生成示例数据（示例行情 + 4 笔示例交易，并转成行情 CSV）
 bash scripts/run_demo.sh
 
 # 4) 启动面板
@@ -73,8 +73,8 @@ streamlit run app.py
 # 解析回放交易 → data/replay_trades_parsed.csv
 python3 scripts/parse_replay_trades.py --input "你的回放交易.csv"
 
-# 1 分钟行情 → 5/15/60 分钟 CSV + Qlib 数据
-python3 scripts/prepare_mes_intraday_qlib.py --input "你的1分钟行情.csv" --symbol MES
+# 1 分钟行情 → 5/15/60 分钟 CSV
+python3 scripts/prepare_mes_intraday.py --input "你的1分钟行情.csv" --symbol MES
 
 streamlit run app.py
 ```
@@ -93,7 +93,7 @@ python3 scripts/fetch_tv_data.py --symbol MES1! --timeframe 5m \
 ```
 
 它会调用 QuantData 的 `tradingview` provider，把拉到的 K 线合并进
-`data/csv_intraday/` 并重建 Qlib 数据，刷新面板即可看到。
+`data/csv_intraday/`，刷新面板即可看到。
 
 > 说明：最近的数据直接走 `ohlcv`；历史 intraday 会自动切到 TradingView 的
 > **K 线回放模式**按天分页拉取，所以长区间会慢一些，拉取期间会临时切换图表
@@ -108,7 +108,7 @@ python3 scripts/fetch_tv_data.py --symbol MES1! --timeframe 5m \
 
 ```
 ├── app.py                          # 复盘面板（Streamlit 入口）
-├── chart_data.py                   # Qlib 写入 + 通过 QuantData 从 TV 拉取的桥接层
+├── chart_data.py                   # 通过 QuantData 从 TV 拉取的桥接层
 ├── chart_lwc.py                    # Lightweight Charts K 线渲染
 ├── sample_data/                    # 示例行情与示例交易（可开箱体验）
 ├── vendor/quantdata/               # QuantData 子项目（git submodule）
@@ -116,20 +116,17 @@ python3 scripts/fetch_tv_data.py --symbol MES1! --timeframe 5m \
 │   ├── run_demo.sh                 # 一键生成示例数据并初始化
 │   ├── generate_sample_data.py     # 生成示例数据
 │   ├── parse_replay_trades.py      # 解析回放交易 CSV → 单笔交易
-│   ├── prepare_mes_intraday_qlib.py# 1 分钟行情 → 5/15/60 分钟 CSV + Qlib
+│   ├── prepare_mes_intraday.py     # 1 分钟行情 → 5/15/60 分钟 CSV
 │   ├── fetch_tv_data.py            # 通过 QuantData 从 TradingView 拉取 K 线
-│   ├── verify_mes_5min.py          # 校验 Qlib 分钟数据覆盖交易时段
-│   └── test_app_logic.py           # 不启动服务，测试面板核心逻辑
 └── docs/
     └── replay_analyzer.md          # 更详细的使用说明
 ```
 
 ## 常见问题
 
-- **`pyqlib` / `numpy` 安装失败**：先 `pip install --upgrade pip`，或换 Python 3.9/3.10 重新建虚拟环境。
+- **依赖安装失败**：先 `pip install --upgrade pip`，或换 Python 3.9/3.10 重新建虚拟环境。
 - **K 线加载为空**：先在「🛠 数据」页上传/拉取对应的行情数据；或先用示例数据确认能跑（`bash scripts/run_demo.sh`）。
 - **出现「交易价格与 K 线不完全匹配」黄色警告**：通常是因为数据源或合约连续方式不同，属于提示，不影响查看。
-- **macOS 多进程报错**：脚本里已内置线程模式，一般无需额外处理。
 
 ## 许可证
 
