@@ -417,35 +417,21 @@ def data_page():
 # 侧边栏
 # ───────────────────────────────────────────────
 def _trade_table_sidebar(trades: pd.DataFrame | None):
-    """左侧交易阅览表：点选一行跳到对应交易详情。"""
+    """左侧交易列表：点击按钮跳到对应交易详情。"""
     if trades is None or trades.empty:
         st.sidebar.caption("暂无交易")
         return
     st.sidebar.markdown("### 交易列表")
 
-    show = trades[["trade_id", "direction", "entry_time", "pnl_usd"]].copy()
-    show["方向"] = show["direction"].map({"long": "多", "short": "空"})
-    show["进场"] = show["entry_time"].dt.strftime("%m-%d %H:%M")
-    show["盈亏"] = show["pnl_usd"].round(1)
-    table = show[["trade_id", "方向", "进场", "盈亏"]].rename(columns={"trade_id": "#"})
-
-    event = st.sidebar.dataframe(
-        table,
-        hide_index=True,
-        use_container_width=True,
-        on_select="rerun",
-        selection_mode="single-row",
-        key="trade_table",
-    )
-    rows = []
-    if event is not None:
-        sel = getattr(event, "selection", None)
-        if sel is not None:
-            rows = getattr(sel, "rows", []) or []
-    if rows:
-        tid = int(table.iloc[rows[0]]["#"])
-        if tid != st.session_state.get("_trade_table_last"):
-            st.session_state._trade_table_last = tid
+    current = int(st.session_state.get("selected_trade_id", trades.iloc[0]["trade_id"]))
+    for _, row in trades.iterrows():
+        tid = int(row["trade_id"])
+        icon = "✅" if row["pnl_usd"] > 0 else "❌"
+        direction_cn = "多" if row["direction"] == "long" else "空"
+        sign = "+" if row["pnl_usd"] > 0 else ""
+        label = f"{icon} #{tid} {direction_cn} {sign}${row['pnl_usd']:.2f}"
+        btn_type = "primary" if tid == current else "secondary"
+        if st.sidebar.button(label, key=f"trade_btn_{tid}", use_container_width=True, type=btn_type):
             st.session_state.selected_trade_id = tid
             st.session_state.page = "detail"
             st.rerun()

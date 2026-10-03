@@ -80,7 +80,8 @@ data/                        # 运行期数据（gitignore，不提交）
 ### app.py（UI）
 
 - 布局：顶部应用栏 = 标题 + 导航按钮（总结/交易/数据）+ 「⚙️ 设置」「📊 指标」两个
-  `st.popover`；左侧侧边栏 = 交易阅览表（`_trade_table_sidebar`，`st.dataframe` 单选行）。
+  `st.popover`；左侧侧边栏 = 交易列表按钮（`_trade_table_sidebar`，一行一个按钮，
+  当前选中的交易高亮）。
 - `main()`：注入主题 CSS、加载/保存设置（`data/settings.json`）、路由到各页面
 - `_settings_ui()` / `_indicators_ui()`：设置和指标管理的弹出内容（放在 popover 里）
 - `summary_page()`：汇总指标 + 权益曲线/盈亏分布/时段胜率/MAE-MFE
