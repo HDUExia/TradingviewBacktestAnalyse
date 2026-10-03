@@ -39,6 +39,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import parse_replay_trades  # noqa: E402
 import prepare_mes_intraday as prep  # noqa: E402
 from chart_data import fetch_and_store, symbol_name  # noqa: E402
+import indicators  # noqa: E402
 
 st.set_page_config(page_title="MES 回放交易分析", layout="wide", initial_sidebar_state="expanded")
 
@@ -412,6 +413,22 @@ def sidebar(trades: pd.DataFrame | None):
             key="setting_tz",
         )
 
+    # 指标插件
+    st.sidebar.divider()
+    with st.sidebar.expander("📊 指标", expanded=False):
+        enabled = {}
+        for iid, entry in indicators.INDICATORS.items():
+            checked = st.checkbox(entry["label"], key=f"ind_{iid}")
+            if checked:
+                params = {}
+                for pname, pval in entry["params"].items():
+                    if pname in ("length", "fast", "slow", "signal"):
+                        params[pname] = int(st.number_input(pname, value=int(pval), min_value=1, step=1, key=f"indparam_{iid}_{pname}"))
+                    else:
+                        params[pname] = st.number_input(pname, value=float(pval), min_value=0.1, step=0.1, key=f"indparam_{iid}_{pname}")
+                enabled[iid] = params
+        st.session_state.enabled_indicators = enabled
+
 
 # ───────────────────────────────────────────────
 # 总结页
@@ -517,15 +534,15 @@ def detail_page(trades: pd.DataFrame):
 
     chart_h = int(st.session_state.chart_height * 0.75)
     tz = st.session_state.get("timezone", "UTC")
+    enabled_ind = st.session_state.get("enabled_indicators", {})
 
-    html_5m = render_chart(df_5m, trade, "5 分钟图", chart_h, tz)
-    components.html(html_5m, height=chart_h, scrolling=False)
-
-    html_15m = render_chart(df_15m, trade, "15 分钟图", chart_h, tz)
-    components.html(html_15m, height=chart_h, scrolling=False)
-
-    html_60m = render_chart(df_60m, trade, "60 分钟图", chart_h, tz)
-    components.html(html_60m, height=chart_h, scrolling=False)
+    for freq_df, label in [(df_5m, "5 分钟图"), (df_15m, "15 分钟图"), (df_60m, "60 分钟图")]:
+        if freq_df.empty:
+            st.caption(f"{label}：暂无数据")
+            continue
+        overlays, panes = indicators.compute_indicators(freq_df, enabled_ind) if enabled_ind else ([], [])
+        html = render_chart(freq_df, trade, label, chart_h, tz, overlays, panes)
+        components.html(html, height=chart_h + 120 * len(panes), scrolling=False)
 
     # 交易数据
     st.divider()

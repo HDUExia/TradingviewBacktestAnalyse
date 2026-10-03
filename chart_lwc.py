@@ -1,4 +1,6 @@
-"""使用 TradingView Lightweight Charts 渲染 K 线图，通过 streamlit 嵌入。"""
+"""使用 TradingView Lightweight Charts 渲染 K 线图与指标，通过 streamlit 嵌入。"""
+from __future__ import annotations
+
 import json
 from datetime import timezone
 
@@ -10,6 +12,8 @@ TZ_LABELS = {
     "Asia/Shanghai": "北京时间 CST",
 }
 
+_LINE_STYLES = {"solid": "Solid", "dashed": "Dashed", "dotted": "Dotted"}
+
 
 def render_chart(
     df: pd.DataFrame,
@@ -17,8 +21,12 @@ def render_chart(
     title: str,
     height: int = 560,
     tz: str = "UTC",
+    overlays: list[dict] | None = None,
+    panes: list[dict] | None = None,
 ) -> str:
     """生成包含 Lightweight Charts 的 HTML。df 传入全量数据，图表自动居中到这笔交易。"""
+    overlays = overlays or []
+    panes = panes or []
     df = df.copy().sort_values("datetime").reset_index(drop=True)
 
     def to_js_time(dt) -> int:
@@ -50,7 +58,6 @@ def render_chart(
     entry_ts = to_js_time(trade["entry_time"])
     exit_ts = to_js_time(trade["exit_time"])
     direction = trade["direction"]
-
     if direction == "long":
         entry_color, entry_shape, entry_pos = "#22c55e", "arrowUp", "belowBar"
         exit_color, exit_shape, exit_pos = "#ef4444", "arrowDown", "aboveBar"
@@ -77,6 +84,53 @@ def render_chart(
         },
     ]
 
+    def _points(values, colors=None):
+        pts = []
+        for i, (dt, v) in enumerate(zip(df["datetime"], values)):
+            if v is None:
+                continue
+            p = {"time": to_js_time(dt), "value": float(v)}
+            if colors is not None:
+                p["color"] = colors[i]
+            pts.append(p)
+        return pts
+
+    overlays_js = [
+        {
+            "name": s["name"],
+            "color": s["color"],
+            "width": s["width"],
+            "style": s["style"],
+            "points": _points(s["values"]),
+        }
+        for s in overlays
+    ]
+
+    panes_js = [
+        {
+            "key": p["key"],
+            "name": p["name"],
+            "series": [
+                {
+                    "name": s["name"],
+                    "kind": s["kind"],
+                    "color": s["color"],
+                    "width": s["width"],
+                    "style": s["style"],
+                    "points": _points(s["values"], s.get("colors")),
+                }
+                for s in p["series"]
+            ],
+        }
+        for p in panes
+    ]
+
+    pane_divs = "".join(
+        f'<div id="pane-{p["key"]}" style="width:100%;height:120px;position:relative;border-top:1px solid #1e222d;">'
+        f'<span style="position:absolute;top:4px;left:8px;font-size:11px;color:#8a8f98;z-index:5;">{p["name"]}</span></div>'
+        for p in panes
+    )
+
     tz_label = TZ_LABELS.get(tz, tz)
 
     html = f"""
@@ -86,7 +140,7 @@ def render_chart(
   <meta charset="UTF-8">
   <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
   <style>
-    body {{ margin: 0; padding: 0; overflow: hidden; background: #131722; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }}
+    body {{ margin: 0; padding: 0; background: #131722; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }}
     #container {{ width: 100%; height: {height}px; position: relative; }}
     #title {{ position: absolute; top: 6px; left: 10px; font-size: 13px; color: #d1d4dc; z-index: 10; background: rgba(19, 23, 34, 0.85); padding: 3px 8px; border-radius: 4px; pointer-events: none; border: 1px solid #2a2e39; }}
     #legend {{ position: absolute; top: 6px; right: 60px; font-size: 12px; color: #d1d4dc; z-index: 10; background: rgba(19, 23, 34, 0.85); padding: 3px 8px; border-radius: 4px; pointer-events: none; border: 1px solid #2a2e39; font-variant-numeric: tabular-nums; }}
@@ -97,12 +151,14 @@ def render_chart(
     <div id="title">{title} · 时区 {tz_label}</div>
     <div id="legend">O — H — L — C — | Vol —</div>
   </div>
+  {pane_divs}
   <script>
     const container = document.getElementById('container');
     const legend = document.getElementById('legend');
     const TZ = {json.dumps(tz)};
     const ENTRY_TS = {entry_ts};
     const EXIT_TS = {exit_ts};
+    const LINE_STYLES = {{ solid: LightweightCharts.LineStyle.Solid, dashed: LightweightCharts.LineStyle.Dashed, dotted: LightweightCharts.LineStyle.Dotted }};
 
     function fmtTZ(seconds) {{
       const d = new Date(seconds * 1000);
@@ -113,6 +169,15 @@ def render_chart(
       }}).format(d);
     }}
 
+    function baseTimeScale() {{
+      return {{
+        borderColor: '#2a2e39',
+        timeVisible: true,
+        secondsVisible: false,
+        tickMarkFormatter: (time) => fmtTZ(time),
+      }};
+    }}
+
     const chart = LightweightCharts.createChart(container, {{
       width: container.clientWidth,
       height: {height},
@@ -121,13 +186,8 @@ def render_chart(
         textColor: '#d1d4dc',
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
       }},
-      localization: {{
-        locale: 'en-GB',
-      }},
-      grid: {{
-        vertLines: {{ color: '#1e222d' }},
-        horzLines: {{ color: '#1e222d' }},
-      }},
+      localization: {{ locale: 'en-GB' }},
+      grid: {{ vertLines: {{ color: '#1e222d' }}, horzLines: {{ color: '#1e222d' }} }},
       crosshair: {{
         mode: LightweightCharts.CrosshairMode.Magnet,
         vertLine: {{ color: '#758696', width: 1, style: 2, labelBackgroundColor: '#758696' }},
@@ -142,49 +202,36 @@ def render_chart(
       }},
       leftPriceScale: {{ visible: false }},
       timeScale: {{
-        borderColor: '#2a2e39',
-        timeVisible: true,
-        secondsVisible: false,
+        ...baseTimeScale(),
         rightOffset: 12,
         barSpacing: 8,
         fixLeftEdge: false,
         fixRightEdge: false,
-        tickMarkFormatter: (time) => fmtTZ(time),
       }},
-      handleScroll: {{
-        vertTouchDrag: false,
-        horzTouchDrag: false,
-        mouseWheel: false,
-        pressedMouseMove: false,
-      }},
-      handleScale: {{
-        axisPressedMouseMove: {{ time: false, price: false }},
-        mouseWheel: false,
-        pinch: false,
-      }},
+      handleScroll: {{ vertTouchDrag: false, horzTouchDrag: false, mouseWheel: false, pressedMouseMove: false }},
+      handleScale: {{ axisPressedMouseMove: {{ time: false, price: false }}, mouseWheel: false, pinch: false }},
     }});
 
     const series = chart.addCandlestickSeries({{
-      upColor: '#26a69a',
-      downColor: '#ef5350',
-      borderVisible: false,
-      wickUpColor: '#26a69a',
-      wickDownColor: '#ef5350',
-      priceScaleId: 'right',
+      upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
+      wickUpColor: '#26a69a', wickDownColor: '#ef5350', priceScaleId: 'right',
     }});
-
     const candles = {json.dumps(candles_js)};
     series.setData(candles);
     series.setMarkers({json.dumps(markers_js)});
 
-    const volSeries = chart.addHistogramSeries({{
-      priceScaleId: '',
-      priceFormat: {{ type: 'volume' }},
-    }});
+    const volSeries = chart.addHistogramSeries({{ priceScaleId: '', priceFormat: {{ type: 'volume' }} }});
     volSeries.setData({json.dumps(volumes_js)});
-    volSeries.priceScale().applyOptions({{
-      scaleMargins: {{ top: 0.82, bottom: 0 }},
-      alignLabels: false,
+    volSeries.priceScale().applyOptions({{ scaleMargins: {{ top: 0.82, bottom: 0 }}, alignLabels: false }});
+
+    const overlays = {json.dumps(overlays_js)};
+    overlays.forEach((o) => {{
+      const line = chart.addLineSeries({{
+        color: o.color, lineWidth: o.width,
+        lineStyle: LINE_STYLES[o.style] || LightweightCharts.LineStyle.Solid,
+        priceLineVisible: false, lastValueVisible: true,
+      }});
+      line.setData(o.points);
     }});
 
     chart.subscribeCrosshairMove((param) => {{
@@ -205,16 +252,54 @@ def render_chart(
       }}
     }});
 
-    // ==================== 拖动平移（向左拖看出场后的更晚，向右拖看进场前的更早） ====================
+    // ==================== 副图 ====================
+    const panes = {json.dumps(panes_js)};
+    const subCharts = [];
+    panes.forEach((p) => {{
+      const el = document.getElementById('pane-' + p.key);
+      if (!el) return;
+      const ch = LightweightCharts.createChart(el, {{
+        width: el.clientWidth,
+        height: 120,
+        layout: {{ background: {{ type: 'solid', color: '#131722' }}, textColor: '#d1d4dc', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }},
+        grid: {{ vertLines: {{ color: '#1e222d' }}, horzLines: {{ color: '#1e222d' }} }},
+        rightPriceScale: {{ borderColor: '#2a2e39', scaleMargins: {{ top: 0.15, bottom: 0.15 }} }},
+        leftPriceScale: {{ visible: false }},
+        timeScale: baseTimeScale(),
+        handleScroll: {{ vertTouchDrag: false, horzTouchDrag: false, mouseWheel: false, pressedMouseMove: false }},
+        handleScale: {{ axisPressedMouseMove: {{ time: false, price: false }}, mouseWheel: false, pinch: false }},
+      }});
+      p.series.forEach((s) => {{
+        if (s.kind === 'histogram') {{
+          const hist = ch.addHistogramSeries({{ priceScaleId: 'right', base: 0, priceFormat: {{ type: 'price' }} }});
+          hist.setData(s.points);
+        }} else {{
+          const line = ch.addLineSeries({{
+            color: s.color, lineWidth: s.width,
+            lineStyle: LINE_STYLES[s.style] || LightweightCharts.LineStyle.Solid,
+            priceLineVisible: false, lastValueVisible: true,
+          }});
+          line.setData(s.points);
+        }}
+      }});
+      subCharts.push(ch);
+    }});
+
+    if (subCharts.length) {{
+      chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {{
+        if (!range) return;
+        subCharts.forEach((ch) => ch.timeScale().setVisibleLogicalRange(range));
+      }});
+    }}
+
+    // ==================== 拖动平移 ====================
     let isDragging = false;
     let startX = 0, startY = 0, lastX = 0, lastY = 0;
     let dragMode = null;
     const DRAG_THRESHOLD = 6;
     const PRICE_SCALE_WIDTH = 58;
 
-    function isPriceScaleArea(x) {{
-      return x > container.clientWidth - PRICE_SCALE_WIDTH;
-    }}
+    function isPriceScaleArea(x) {{ return x > container.clientWidth - PRICE_SCALE_WIDTH; }}
 
     container.addEventListener('mousedown', (e) => {{
       if (e.button !== 0) return;
@@ -231,18 +316,12 @@ def render_chart(
       const dy = e.clientY - lastY;
       const totalDx = e.clientX - startX;
       const totalDy = e.clientY - startY;
-
       if (dragMode === null && (Math.abs(totalDx) > DRAG_THRESHOLD || Math.abs(totalDy) > DRAG_THRESHOLD)) {{
-        if (isPriceScaleArea(startX)) {{
-          dragMode = 'price';
-        }} else {{
-          dragMode = Math.abs(totalDy) > Math.abs(totalDx) ? 'price' : 'time';
-        }}
+        if (isPriceScaleArea(startX)) dragMode = 'price';
+        else dragMode = Math.abs(totalDy) > Math.abs(totalDx) ? 'price' : 'time';
       }}
-
       lastX = e.clientX;
       lastY = e.clientY;
-
       if (dragMode === 'price') {{
         const panSpeed = 0.0022;
         const ps = chart.priceScale('right');
@@ -268,9 +347,7 @@ def render_chart(
       e.preventDefault();
       const rect = container.getBoundingClientRect();
       const localX = e.clientX - rect.left;
-      const isPriceArea = isPriceScaleArea(localX);
-
-      if (isPriceArea) {{
+      if (isPriceScaleArea(localX)) {{
         const zoomSpeed = 0.12;
         const factor = e.deltaY > 0 ? (1 + zoomSpeed) : (1 - zoomSpeed);
         const ps = chart.priceScale('right');
@@ -296,27 +373,25 @@ def render_chart(
       }}
     }}, {{ passive: false }});
 
-    // 双击右侧价位表：把价格轴的上下拉伸/缩放恢复默认（自动缩放）
     container.addEventListener('dblclick', (e) => {{
       const rect = container.getBoundingClientRect();
       const localX = e.clientX - rect.left;
       if (isPriceScaleArea(localX)) {{
-        chart.priceScale('right').applyOptions({{
-          autoScale: true,
-          scaleMargins: {{ top: 0.08, bottom: 0.18 }},
-        }});
+        chart.priceScale('right').applyOptions({{ autoScale: true, scaleMargins: {{ top: 0.08, bottom: 0.18 }} }});
       }}
     }});
 
     const resizeObserver = new ResizeObserver(() => {{
       chart.applyOptions({{ width: container.clientWidth }});
+      subCharts.forEach((ch) => {{
+        const el = document.getElementById('pane-' + panes[subCharts.indexOf(ch)].key);
+        if (el) ch.applyOptions({{ width: el.clientWidth }});
+      }});
     }});
     resizeObserver.observe(container);
 
     function findIndex(ts) {{
-      for (let i = 0; i < candles.length; i++) {{
-        if (candles[i].time >= ts) return i;
-      }}
+      for (let i = 0; i < candles.length; i++) if (candles[i].time >= ts) return i;
       return candles.length - 1;
     }}
 
