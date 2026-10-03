@@ -416,18 +416,46 @@ def sidebar(trades: pd.DataFrame | None):
     # 指标插件
     st.sidebar.divider()
     with st.sidebar.expander("📊 指标", expanded=False):
-        enabled = {}
-        for iid, entry in indicators.INDICATORS.items():
-            checked = st.checkbox(entry["label"], key=f"ind_{iid}")
-            if checked:
+        st.session_state.setdefault("ind_instances", [])
+        instances = st.session_state.ind_instances
+
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            new_type = st.selectbox(
+                "指标类型",
+                list(indicators.INDICATORS),
+                format_func=lambda t: indicators.INDICATORS[t]["label"],
+                key="ind_new_type",
+            )
+        with c2:
+            if st.button("➕ 添加", use_container_width=True, key="ind_add_btn"):
+                instances.append({
+                    "id": uuid.uuid4().hex,
+                    "type": new_type,
+                    "params": dict(indicators.INDICATORS[new_type]["params"]),
+                })
+                st.rerun()
+
+        if not instances:
+            st.caption("尚未添加指标。")
+
+        for inst in instances:
+            entry = indicators.INDICATORS.get(inst["type"])
+            if not entry:
+                continue
+            with st.container(border=True):
+                ch, cd = st.columns([5, 1])
+                ch.markdown(f"**{entry['label']}**")
+                if cd.button("删除", key=f"ind_del_{inst['id']}", use_container_width=True):
+                    st.session_state.ind_instances = [x for x in instances if x["id"] != inst["id"]]
+                    st.rerun()
                 params = {}
-                for pname, pval in entry["params"].items():
+                for pname, pval in inst["params"].items():
                     if pname in ("length", "fast", "slow", "signal"):
-                        params[pname] = int(st.number_input(pname, value=int(pval), min_value=1, step=1, key=f"indparam_{iid}_{pname}"))
+                        params[pname] = int(st.number_input(pname, value=int(pval), min_value=1, step=1, key=f"indparam_{inst['id']}_{pname}"))
                     else:
-                        params[pname] = st.number_input(pname, value=float(pval), min_value=0.1, step=0.1, key=f"indparam_{iid}_{pname}")
-                enabled[iid] = params
-        st.session_state.enabled_indicators = enabled
+                        params[pname] = st.number_input(pname, value=float(pval), min_value=0.1, step=0.1, key=f"indparam_{inst['id']}_{pname}")
+                inst["params"] = params
 
 
 # ───────────────────────────────────────────────
@@ -534,13 +562,13 @@ def detail_page(trades: pd.DataFrame):
 
     chart_h = int(st.session_state.chart_height * 0.75)
     tz = st.session_state.get("timezone", "UTC")
-    enabled_ind = st.session_state.get("enabled_indicators", {})
+    ind_instances = st.session_state.get("ind_instances", [])
 
     for freq_df, label in [(df_5m, "5 分钟图"), (df_15m, "15 分钟图"), (df_60m, "60 分钟图")]:
         if freq_df.empty:
             st.caption(f"{label}：暂无数据")
             continue
-        overlays, panes = indicators.compute_indicators(freq_df, enabled_ind) if enabled_ind else ([], [])
+        overlays, panes = indicators.compute_indicators(freq_df, ind_instances) if ind_instances else ([], [])
         html = render_chart(freq_df, trade, label, chart_h, tz, overlays, panes)
         components.html(html, height=chart_h + 120 * len(panes), scrolling=False)
 

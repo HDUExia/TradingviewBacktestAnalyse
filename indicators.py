@@ -106,11 +106,13 @@ INDICATORS = {
 }
 
 
-def compute_indicators(df, enabled):
-    """enabled: {indicator_id: params}. 返回 (overlays, panes)。"""
+def compute_indicators(df, instances):
+    """instances: [{"type": indicator_id, "params": {...}}, ...]. 返回 (overlays, panes)。"""
     overlays = []
     pane_map = {}
-    for iid, params in enabled.items():
+    for inst in instances:
+        iid = inst.get("type") if isinstance(inst, dict) else inst
+        params = inst.get("params") if isinstance(inst, dict) else {}
         entry = INDICATORS.get(iid)
         if not entry:
             continue
