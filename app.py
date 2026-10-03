@@ -345,7 +345,7 @@ def data_page():
         st.caption("解析后会保存到 `data/replay_trades_parsed.csv`，刷新页面不会丢失。")
 
     with tab_klines:
-        st.subheader("方式一：上传 1 分钟行情 CSV")
+        st.subheader("上传 1 分钟行情 CSV")
         st.caption(
             "列名需包含 `DateTime, Open, High, Low, Close, Volume`。"
             "可参考 `sample_data/sample_1min.csv`。"
@@ -359,29 +359,6 @@ def data_page():
                 st.success("已生成 5/15/60 分钟行情数据，去「交易」页查看。")
             except Exception as exc:
                 st.error(f"生成失败：{exc}")
-
-        st.divider()
-        st.subheader("方式二：从 TradingView 拉取（通过 QuantData）")
-        st.caption("需要本机运行 TradingView Desktop + TradingView MCP（tv CLI）。历史 intraday 走回放模式，长区间会慢一些。")
-        with st.form("tv_fetch_form"):
-            c1, c2 = st.columns(2)
-            symbol = c1.text_input("TradingView 品种", value="MES1!")
-            timeframe = c2.selectbox("周期", ["5m", "15m", "60m", "1d"])
-            c3, c4 = st.columns(2)
-            start = c3.date_input("开始日期", value=date.today() - timedelta(days=7))
-            end = c4.date_input("结束日期", value=date.today())
-            submitted = st.form_submit_button("拉取并生成行情")
-        if submitted:
-            with st.spinner("正在从 TradingView 拉取…"):
-                try:
-                    n = fetch_and_store(symbol, timeframe, start, end, CSV_DIR)
-                    st.cache_data.clear()
-                    if n:
-                        st.success(f"已拉取 {n} 根 {timeframe} K 线并生成行情数据。")
-                    else:
-                        st.warning("没拉到数据：历史 intraday 可能不在可用范围。")
-                except Exception as exc:
-                    st.error(f"拉取失败：{exc}")
 
     with tab_auto:
         st.subheader("自动分析交易记录并拉取行情")
