@@ -64,13 +64,15 @@ _CSS = """
   background: #1f2430;
   color: #e6e6e6;
   font-weight: 500;
+  padding: 0.25rem 0.6rem;
+  min-height: 0;
   transition: background .15s, box-shadow .15s;
 }
 .stButton > button:hover { background: #2a303c; box-shadow: 0 1px 2px rgba(0,0,0,.4); }
 .stButton > button[kind="primary"] { background: #4c8bf5; color: #fff; border: none; }
 .stButton > button[kind="primary"]:hover { background: #3a79e0; }
 [data-testid="stColorPicker"] input { display: none !important; }
-[data-testid="stColorPicker"] { min-width: 0; }
+[data-testid="stColorPicker"] { min-width: 0; padding: 0; }
 [data-testid="stVerticalBlockBorderWrapper"] {
   background: #161b26; border-radius: 12px; border: 1px solid #262d3a;
 }
@@ -473,16 +475,17 @@ def _indicators_ui():
     st.session_state.setdefault("ind_instances", [])
     instances = st.session_state.ind_instances
 
-    c1, c2 = st.columns([5, 2])
+    c1, c2 = st.columns([5, 2], vertical_alignment="center")
     with c1:
         new_type = st.selectbox(
             "指标类型",
             list(indicators.INDICATORS),
             format_func=lambda t: indicators.INDICATORS[t]["label"],
+            label_visibility="collapsed",
             key="ind_new_type",
         )
     with c2:
-        if st.button("➕ 添加", use_container_width=True, key="ind_add_btn"):
+        if st.button("添加", use_container_width=True, key="ind_add_btn"):
             used = {inst.get("color") for inst in instances}
             instances.append({
                 "id": uuid.uuid4().hex,
@@ -500,7 +503,7 @@ def _indicators_ui():
         if not entry:
             continue
         with st.container(border=True):
-            ch, ccol, cd = st.columns([4, 1, 2])
+            ch, ccol, cd = st.columns([4, 1, 2], vertical_alignment="center")
             ch.markdown(f"**{entry['label']}**")
             with ccol:
                 inst["color"] = st.color_picker(
