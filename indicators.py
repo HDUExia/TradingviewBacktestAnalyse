@@ -1,14 +1,14 @@
-"""指标插件库。
+"""技术指标计算与注册表。
 
-每个指标是一个函数：接收行情 DataFrame 和参数，返回一个或多个 series。
-新增指标只需写一个函数，并在 ``INDICATORS`` 注册表里登记即可。
+指标函数接收行情 DataFrame 和参数，返回一个或多个 series。新增指标时，
+实现计算函数并在 ``INDICATORS`` 中注册。
 
 series 结构：
-    key   唯一键
+    key   标识
     name  显示名
     pane  "main" 或子图名
     kind  "line" | "histogram"
-    values 与 df 行对齐的数值列表（含 None）
+    values 与 df 行对齐的数值列表，可包含 None
     color  颜色
     width  线宽
     style  solid | dashed | dotted
@@ -137,7 +137,7 @@ INDICATORS = {
 
 
 def compute_indicators(df, instances):
-    """instances: [{"type": indicator_id, "params": {...}}, ...]. 返回 (overlays, panes)。"""
+    """根据实例配置计算指标，返回主图线和副图线。"""
     overlays = []
     pane_map = {}
     for inst in instances:

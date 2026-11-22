@@ -1,10 +1,4 @@
-"""通过 QuantData(QD) 从 TradingView 拉取 K 线，合并进本地 CSV。
-
-用法示例：
-    python3 scripts/fetch_tv_data.py --symbol MES1! --timeframe 5m \
-        --start 2026-10-01 --end 2026-10-02
-
-"""
+"""通过 QuantData 从 TradingView 获取 K 线并写入本地 CSV。"""
 from __future__ import annotations
 
 import argparse

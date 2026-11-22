@@ -1,6 +1,6 @@
-"""Markdown 报告导入导出：序列化「原始交易数据 + 评论」，用于持久化与 AI 分析。
+"""Markdown 报告导入导出。
 
-约定：
+格式约定：
 - K 线数据不放进 Markdown（体积大，且可由本地 CSV / TradingView 重新生成）。
 - 原始交易数据以带标记的 ```csv 代码块嵌入。
 - 评论以 `<!-- TBA_COMMENT_BEGIN {...} -->` ... `<!-- TBA_COMMENT_END -->` 包裹，

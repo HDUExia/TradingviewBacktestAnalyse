@@ -1,18 +1,9 @@
-# TradingviewBacktestAnalyse 开发文档（给 AI 接力用）
+# TradingviewBacktestAnalyse 开发维护说明
 
-## 0. 文档同步规则（最高优先级，必须遵守）
+## 0. 文档同步
 
-本文档（以及 `README.md`、`docs/` 下其它文档）是项目事实的权威来源。
-
-任何**功能改动或设计改动**，只要和现有文档描述不一致，必须：
-
-1. **改动时主动声明差异**：在提交说明 / 回复里明确写出「我改动了 X，与文档的 Y 节
-   描述不一致」，让相关方知情，不能默默改掉。
-2. **确认后立即同步文档**：改动被确认后，必须同步更新本文档及所有受影响的文档，
-   保证文档与代码一致。
-
-**禁止「代码改了、文档没改」的漂移。** 如果发现文档与代码不一致，以最新确认后的
-状态为准，并尽快补齐落后的一侧。
+本文档、`README.md` 和 `docs/` 下的说明应与代码保持一致。功能或设计发生变化时，
+同步修改受影响的章节；发现描述过期时，以当前代码和已确认的设计为准更新文档。
 
 ## 1. 项目是什么
 
@@ -24,7 +15,7 @@
 - 无数据库、无后端，本地单机运行，数据全部落在 `data/` 目录（已 gitignore）。
 - **已彻底移除 Qlib**：行情直接用普通 CSV 读取，不再有 Qlib 二进制/依赖。
 
-## 2. 快速启动
+## 2. 启动
 
 ```bash
 git clone --recurse-submodules git@github.com:HDUExia/TradingviewBacktestAnalyse.git
@@ -35,7 +26,7 @@ bash scripts/run_demo.sh      # 生成示例数据
 streamlit run app.py
 ```
 
-依赖只有 `numpy / pandas / plotly / streamlit`。Python 3.9+ 即可。
+依赖为 `numpy / pandas / plotly / streamlit`，Python 3.9 或更高版本可用。
 
 ## 3. 目录结构
 
@@ -50,7 +41,7 @@ scripts/
   parse_replay_trades.py     # 回放交易 CSV -> data/replay_trades_parsed.csv
   prepare_mes_intraday.py    # 1分钟 CSV -> 5/15/60 分钟 CSV
   fetch_tv_data.py           # 通过 QD 从 TradingView 拉取 K 线
-  run_demo.sh                # 一键初始化示例数据
+  run_demo.sh                # 初始化示例数据
 sample_data/                 # 提交到仓库的示例数据
 vendor/quantdata/            # QuantData 子项目（git submodule）
 data/                        # 运行期数据（gitignore，不提交）
@@ -87,7 +78,7 @@ data/                        # 运行期数据（gitignore，不提交）
 
 ### app.py（UI）
 
-- 布局：顶部应用栏 = 标题 + 导航按钮（总结/交易/数据）+ 「⚙️ 设置」「📊 指标」两个
+- 布局：顶部应用栏包含标题、导航按钮（总结/交易/数据）、设置和指标两个弹出面板。
   `st.popover`；左侧侧边栏 = 交易列表按钮（`_trade_table_sidebar`，一行一个按钮，
   当前选中的交易高亮，**仅在交易页显示**，其它页面通过 CSS 隐藏侧边栏）。
 - `main()`：注入主题 CSS、加载/保存设置（`data/settings.json`）、路由到各页面
@@ -103,7 +94,7 @@ data/                        # 运行期数据（gitignore，不提交）
 - `.streamlit/config.toml`：**深色主题**（背景 `#0e1117`、文字 `#e6e6e6`、主色 `#4c8bf5`），
   与 K 线图/汇总图的深色 `#131722` 保持一致。
 - `app.py` 顶部 `_CSS`：隐藏 Streamlit 默认 header/footer/菜单和侧边栏，圆角按钮/卡片/metric、Material 风格按钮。
-- 修改 UI 样式只改 `_CSS` 或 `config.toml`，不要散落各处。
+- UI 样式集中在 `_CSS` 和 `config.toml` 中修改。
 
 ### chart_lwc.py（图表渲染）
 
@@ -141,23 +132,22 @@ data/                        # 运行期数据（gitignore，不提交）
 
 ## 6. 关键设计决策
 
-- **不用 Qlib**：行情直接用 CSV，简单、依赖少、可读。
+- **行情格式**：直接使用 CSV，依赖少，便于检查和处理。
 - **全量加载 + 拖动**：不用「前后 K 线数」滑块，加载全部数据让用户自由拖动查看。
 - **时区统一按 UTC 存储**，显示时区可配置（避免历史 bug）。
 - **指标渲染时计算**：改参数立即生效，不用重新拉数据。
 - **指标插件化**：新增指标不改主流程。
 - **成交量指标归成交量轴**，价格型指标归价格轴，避免值域差异压扁 K 线。
 
-## 7. 注意事项 / 坑
+## 7. 维护注意事项
 
 1. **Python 3.9 兼容**：`X | None` 类型注解需要 `from __future__ import annotations`，否则 3.9 会报错。
 2. **Streamlit session_state 刷新即丢**：指标/时区/图表高度要跨刷新持久化，走 `data/settings.json`（`load_settings` / `save_settings`），在 `main()` 开头加载、结尾保存。
-3. **自定义组件**：`declare_component` 的 `path` 必须是绝对路径，且目录里有 `index.html`。组件与 Python 通过 `setComponentValue` 回传，注意用 `last_...` session_state 去重，避免重复处理。
+3. **自定义组件**：`declare_component` 的 `path` 使用绝对路径，目录中需要有 `index.html`。组件通过 `setComponentValue` 向 Python 回传数据，使用 `last_...` session_state 去重。
 4. **全量数据 + 多指标会撑大 HTML**（几千根 K 线 + 全部指标可到几 MB）。数据量大时要考虑抽稀/分页。
 5. **时区假设**：行情 CSV 的 `date` 一律按 UTC 解释。若用户自己的 1 分钟 CSV 是别的时区，会整体偏移，需要「导入时区」选项。
 6. **子模块**：`vendor/quantdata` 是 QD 的子模块，克隆要 `--recurse-submodules`；改 QD 后要在 TBA 里 `git add vendor/quantdata` 提交指针。
-7. **`data/` 全部 gitignore**：不要把用户数据/图片/设置提交上去。
-8. **删除文件用 apply_patch 或移到废纸篓**，不要 `rm -rf`（环境有安全拦截）。
+7. **`data/` 全部 gitignore**：用户数据、图片和设置不提交到仓库。
 
 ## 8. 如何扩展
 

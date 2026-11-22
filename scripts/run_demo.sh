@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 一键初始化示例数据，让你不用自己的行情/交易也能跑起复盘面板。
+# 初始化示例数据。
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -17,4 +17,4 @@ python3 scripts/prepare_mes_intraday.py \
   --symbol MES
 
 echo
-echo "完成！现在运行: streamlit run app.py"
+echo "完成。运行 streamlit run app.py 启动面板。"

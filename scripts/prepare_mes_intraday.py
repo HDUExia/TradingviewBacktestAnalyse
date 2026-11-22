@@ -1,9 +1,4 @@
-"""
-读取 1 分钟 CSV，重采样为 5m/15m/60m 的 CSV。
-
-用法示例：
-    python scripts/prepare_mes_intraday.py --input "@MES#C_1min_20260611.csv" --symbol MES
-"""
+"""读取 1 分钟 CSV，重采样为 5、15、60 分钟数据。"""
 import argparse
 import sys
 from pathlib import Path

@@ -1,4 +1,4 @@
-"""TBA 与 QuantData(QD) 的桥接层：通过 QD 的 TradingView provider 拉取 K 线。"""
+"""通过 QuantData 的 TradingView provider 获取并保存 K 线数据。"""
 from __future__ import annotations
 
 import sys
@@ -23,15 +23,14 @@ TIMEFRAME_TO_FREQ = {
 
 
 def symbol_name(symbol: str) -> str:
-    """TradingView 代码（如 MES1!）-> 本地短符号（MES）。"""
+    """将 TradingView 代码（如 MES1!）转换为本地符号（MES）。"""
     return symbol.replace("1!", "").replace("#", "").upper()
 
 
 def fill_session_gaps(df: pd.DataFrame, max_gap_minutes: int = 120) -> pd.DataFrame:
-    """填平交易时段内的小缺口（如 CME 每日约 1 小时维护停盘），保证 K 线连续。
+    """填补交易时段内的小缺口。
 
-    只填 ``max_gap_minutes`` 以内的小缺口；周末/节假日这类数小时到数天的大缺口
-    保持不动。
+    只处理 ``max_gap_minutes`` 以内的缺口，周末和节假日的大缺口保持不变。
     """
     if df.empty or len(df) < 2:
         return df
@@ -71,7 +70,7 @@ def fetch_tradingview_bars(
     end: date,
     count: int = 300,
 ) -> pd.DataFrame:
-    """通过 QD 的 TradingView provider 拉取 K 线，返回面板格式的 DataFrame。"""
+    """从 TradingView 获取 K 线，返回面板使用的 DataFrame。"""
     if str(QD_SRC) not in sys.path:
         sys.path.insert(0, str(QD_SRC))
 
@@ -101,7 +100,7 @@ def fetch_and_store(
     csv_dir: Path,
     count: int = 300,
 ) -> int:
-    """从 TradingView 拉取 K 线，合并进本地 CSV，返回新增根数。"""
+    """获取 K 线并合并到本地 CSV，返回本次获取的记录数。"""
     freq = TIMEFRAME_TO_FREQ.get(timeframe, timeframe + "min")
     name = symbol_name(symbol)
 

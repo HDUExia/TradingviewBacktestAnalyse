@@ -1,7 +1,4 @@
-"""
-解析 TradingView 回放交易 CSV，把进场/出场记录聚合成单笔交易。
-输出：data/replay_trades_parsed.csv
-"""
+"""解析 TradingView 回放交易 CSV，并输出单笔交易记录。"""
 import argparse
 from pathlib import Path
 
@@ -16,7 +13,7 @@ def parse(input_path: Path = INPUT, output_path: Path = OUTPUT) -> int:
     df = pd.read_csv(input_path, encoding="utf-8-sig")
     df["datetime"] = pd.to_datetime(df["日期和时间"])
 
-    # 映射类型为英文/统一格式
+    # 统一交易类型
     type_map = {
         "多头进场": "long_entry",
         "多头出场": "long_exit",

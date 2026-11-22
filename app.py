@@ -1,13 +1,6 @@
-"""
-MES 回放交易分析面板 v3
+"""MES 回放交易分析面板。
 
-- 左侧边栏：导航（总结 / 交易 / 数据管理）、交易列表、设置齿轮
-- 总结页：统计数据、权益曲线、盈亏分布
-- 交易详情页：K 线图 + 交易数据
-- 数据管理页：上传回放交易 CSV、上传 1 分钟行情、或从 TradingView 拉取
-
-运行方式：
-    streamlit run app.py
+运行：streamlit run app.py
 """
 from __future__ import annotations
 
@@ -78,9 +71,7 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 """
 
 
-# ───────────────────────────────────────────────
 # 数据加载
-# ───────────────────────────────────────────────
 @st.cache_data
 def load_trades() -> pd.DataFrame:
     df = pd.read_csv(TRADES_CSV)
@@ -102,7 +93,7 @@ def session_of_hour(h):
 
 @st.cache_data
 def load_klines(freq: str, start_dt: str | None = None, end_dt: str | None = None) -> pd.DataFrame:
-    """读取 data/csv_intraday/<freq>/ 下的行情 CSV，可选按时间窗口过滤。"""
+    """读取指定周期的行情 CSV，可按时间窗口过滤。"""
     columns = ["symbol", "datetime", "open", "high", "low", "close", "volume"]
     freq_dir = CSV_DIR / freq
     if not freq_dir.exists():
@@ -127,9 +118,7 @@ def load_klines(freq: str, start_dt: str | None = None, end_dt: str | None = Non
     return df.sort_values("datetime").reset_index(drop=True)
 
 
-# ───────────────────────────────────────────────
 # 指标计算
-# ───────────────────────────────────────────────
 def compute_metrics(trades: pd.DataFrame) -> dict:
     wins = trades[trades["pnl_usd"] > 0]
     losses = trades[trades["pnl_usd"] <= 0]
@@ -176,7 +165,7 @@ def max_consecutive(series):
 
 
 def save_upload(uploaded, name: str) -> Path:
-    """把 Streamlit 上传的文件保存到 data/ 目录，返回路径。"""
+    """保存上传文件并返回路径。"""
     (ROOT / "data").mkdir(parents=True, exist_ok=True)
     path = ROOT / "data" / name
     path.write_bytes(uploaded.getvalue())
@@ -226,7 +215,7 @@ def save_settings() -> None:
 
 
 def prepare_intraday(input_path: Path, symbol: str, csv_dir: Path) -> None:
-    """1 分钟 CSV → 5/15/60 分钟 CSV。"""
+    """把 1 分钟行情转换为 5、15、60 分钟数据。"""
     df_1m = prep.load_1min(input_path, symbol)
     for freq, rule in prep.FREQS.items():
         df_freq = prep.resample(df_1m, rule, symbol)
@@ -234,7 +223,7 @@ def prepare_intraday(input_path: Path, symbol: str, csv_dir: Path) -> None:
 
 
 def trades_date_range(trades_csv: Path) -> tuple[date, date] | None:
-    """从交易记录里自动判定需要拉取的日期区间（进出场前后各留 1 天余量）。"""
+    """根据交易记录计算行情日期范围，首尾各增加一天。"""
     if not trades_csv.exists():
         return None
     df = pd.read_csv(trades_csv)
@@ -248,7 +237,7 @@ def trades_date_range(trades_csv: Path) -> tuple[date, date] | None:
 
 
 def auto_fetch_klines(symbol: str, start: date, end: date) -> int:
-    """拉取 5 分钟数据，再本地重采样出 15/60 分钟 CSV，返回 5 分钟根数。"""
+    """拉取 5 分钟数据并生成 15、60 分钟数据，返回 5 分钟记录数。"""
     n = fetch_and_store(symbol, "5m", start, end, CSV_DIR)
     if n == 0:
         return 0
@@ -265,11 +254,9 @@ def auto_fetch_klines(symbol: str, start: date, end: date) -> int:
     return n
 
 
-# ───────────────────────────────────────────────
 # 数据管理页
-# ───────────────────────────────────────────────
 def _on_trades_upload() -> None:
-    """上传回放交易 CSV 后自动解析并持久化。"""
+    """处理上传的回放交易 CSV。"""
     up = st.session_state.get("trades_upload")
     if up is None:
         return
@@ -277,14 +264,14 @@ def _on_trades_upload() -> None:
     try:
         n = parse_replay_trades.parse(path, TRADES_CSV)
         st.cache_data.clear()
-        st.session_state["trades_parse_msg"] = ("success", f"已解析 {n} 笔交易并保存（刷新后仍在）。")
+        st.session_state["trades_parse_msg"] = ("success", f"已解析 {n} 笔交易，文件已保存。")
     except Exception as exc:
         st.session_state["trades_parse_msg"] = ("error", f"解析失败：{exc}")
 
 
 def data_page():
-    st.header("🛠 数据管理")
-    st.caption("先导入交易数据，再准备行情数据，即可开始复盘。")
+    st.header("数据管理")
+    st.caption("先导入交易数据，再准备行情数据。")
 
     # 当前数据状态
     s1, s2 = st.columns(2)
@@ -302,30 +289,30 @@ def data_page():
 
     st.divider()
 
-    # ── 交易数据 ──
-    st.subheader("📄 交易数据")
+    # 交易数据
+    st.subheader("交易数据")
     trade_mode = st.selectbox(
         "导入方式",
         ["TV 数据导入", "TBA 数据导入"],
         key="trade_mode",
-        help="TV 数据导入：上传 TradingView 回放交易 CSV；TBA 数据导入：导入之前导出的 Markdown 报告。",
+        help="TV 数据导入上传 TradingView 回放交易 CSV；TBA 数据导入读取导出的 Markdown 报告。",
     )
 
     if trade_mode == "TV 数据导入":
-        st.caption("上传 TradingView 导出的回放交易 CSV，自动解析成单笔交易。")
+        st.caption("上传 TradingView 导出的回放交易 CSV，解析为单笔交易。")
         st.caption(
             "列名需包含 `日期和时间、类型、交易编号、信号、价格 USD、大小（数量）、"
             "净损益 USD、回报 %、手续费 USD、有利波动 USD、有利波动 %、不利波动 USD、"
-            "不利波动 %、持续时间（K线）、累计损益 USD`。可参考 `sample_data/sample_trades.csv`。"
+            "不利波动 %、持续时间（K线）、累计损益 USD`。示例：`sample_data/sample_trades.csv`。"
         )
         st.file_uploader("选择 CSV 文件", type=["csv"], key="trades_upload", on_change=_on_trades_upload)
         msg = st.session_state.get("trades_parse_msg")
         if msg:
             kind, text = msg
             (st.success if kind == "success" else st.error)(text)
-        st.caption("解析后会保存到 `data/replay_trades_parsed.csv`，刷新页面不会丢失。")
+        st.caption("解析结果保存到 `data/replay_trades_parsed.csv`。")
     else:
-        st.caption("导入之前导出的 TBA Markdown 报告，反解析成「原始交易数据 + 评论」（K 线数据需单独准备）。")
+        st.caption("导入 TBA Markdown 报告，恢复交易数据和评论。K 线数据需要单独准备。")
         md_file = st.file_uploader("选择 .md 文件", type=["md", "markdown"], key="md_upload")
         if md_file is not None and st.button("导入报告", key="btn_md_import"):
             try:
@@ -346,38 +333,38 @@ def data_page():
 
     st.divider()
 
-    # ── 行情数据 ──
-    st.subheader("📈 行情数据")
+    # 行情数据
+    st.subheader("行情数据")
     kline_mode = st.selectbox(
         "获取方式",
         ["自动拉取", "手动导入"],
         key="kline_mode",
-        help="自动拉取：通过 TradingView MCP 按交易区间自动拉取；手动导入：上传本地 1 分钟行情 CSV。",
+        help="自动拉取通过 TradingView MCP 获取行情；手动导入上传本地 1 分钟行情 CSV。",
     )
 
     if kline_mode == "自动拉取":
-        st.caption("根据交易记录自动判定「进场最早 ~ 出场最晚」的区间（前后各留 1 天），通过 MCP 拉取 5/15/60 分钟行情。")
+        st.caption("按交易记录确定日期范围，首尾各增加一天，再通过 MCP 获取 5、15、60 分钟行情。")
         symbol = st.text_input("TradingView 品种", value="MES1!", key="auto_symbol")
         rng = trades_date_range(TRADES_CSV)
         if rng is None:
             st.warning("还没有交易数据，请先在上方导入交易数据。")
         else:
             start, end = rng
-            st.info(f"自动判定的拉取区间：**{start} ~ {end}**（{(end - start).days} 天）")
-        if st.button("🚀 开始拉取", type="primary", width="stretch", disabled=(rng is None)):
+            st.info(f"拉取区间：**{start} ~ {end}**（{(end - start).days} 天）")
+        if st.button("开始拉取", type="primary", width="stretch", disabled=(rng is None)):
             start, end = rng
-            with st.spinner(f"正在拉取 {symbol} {start} ~ {end} 的 5 分钟数据（历史区间走回放模式，可能较慢）…"):
+            with st.spinner(f"正在拉取 {symbol} {start} ~ {end} 的 5 分钟数据，历史区间可能需要较长时间。"):
                 try:
                     n = auto_fetch_klines(symbol, start, end)
                     st.cache_data.clear()
                     if n:
-                        st.success(f"完成：拉取 {n} 根 5 分钟 K 线，并已生成 15/60 分钟数据。去「📈 交易」页查看。")
+                        st.success(f"已拉取 {n} 根 5 分钟 K 线，并生成 15、60 分钟数据。请返回「交易」页查看。")
                     else:
                         st.error("拉取失败：没拿到数据，请确认 TradingView Desktop 已运行、品种正确。")
                 except Exception as exc:
                     st.error(f"拉取失败：{exc}")
     else:
-        st.caption("上传本地 1 分钟行情 CSV，重采样为 5/15/60 分钟。")
+        st.caption("上传本地 1 分钟行情 CSV，转换为 5、15、60 分钟数据。")
         st.caption(
             "列名需包含 `DateTime, Open, High, Low, Close, Volume`。"
             "可参考 `sample_data/sample_1min.csv`。"
@@ -388,16 +375,14 @@ def data_page():
             try:
                 prepare_intraday(path, "MES", CSV_DIR)
                 st.cache_data.clear()
-                st.success("已生成 5/15/60 分钟行情数据，去「交易」页查看。")
+                st.success("已生成 5、15、60 分钟行情数据。请返回「交易」页查看。")
             except Exception as exc:
                 st.error(f"生成失败：{exc}")
 
 
-# ───────────────────────────────────────────────
 # 侧边栏
-# ───────────────────────────────────────────────
 def _trade_table_sidebar(trades: pd.DataFrame | None):
-    """左侧交易列表：点击按钮跳到对应交易详情。"""
+    """显示交易列表并切换当前交易。"""
     if trades is None or trades.empty:
         st.sidebar.caption("暂无交易")
         return
@@ -406,7 +391,7 @@ def _trade_table_sidebar(trades: pd.DataFrame | None):
     current = int(st.session_state.get("selected_trade_id", trades.iloc[0]["trade_id"]))
     for _, row in trades.iterrows():
         tid = int(row["trade_id"])
-        icon = "✅" if row["pnl_usd"] > 0 else "❌"
+        icon = "+" if row["pnl_usd"] > 0 else "-"
         direction_cn = "多" if row["direction"] == "long" else "空"
         sign = "+" if row["pnl_usd"] > 0 else ""
         label = f"{icon} #{tid} {direction_cn} {sign}${row['pnl_usd']:.2f}"
@@ -488,11 +473,9 @@ def _indicators_ui():
             inst["params"] = params
 
 
-# ───────────────────────────────────────────────
 # 总结页
-# ───────────────────────────────────────────────
 def summary_page(trades: pd.DataFrame):
-    st.header("📊 交易总结")
+    st.header("交易总结")
 
     metrics = compute_metrics(trades)
 
@@ -543,12 +526,12 @@ def summary_page(trades: pd.DataFrame):
     st.divider()
     st.subheader("交易明细")
     display_df = trades[["trade_id", "direction", "entry_time", "exit_time", "pnl_usd", "return_pct", "duration_minutes", "mfe_usd", "mae_usd", "session"]].copy()
-    display_df["结果"] = display_df["pnl_usd"].apply(lambda x: "✅ 盈" if x > 0 else "❌ 亏")
+    display_df["结果"] = display_df["pnl_usd"].apply(lambda x: "盈" if x > 0 else "亏")
     st.dataframe(display_df, width="stretch")
 
     st.divider()
-    st.subheader("📦 导出 Markdown 报告")
-    st.caption("报告包含原始交易数据 + 评论（K 线数据不包含，需单独保留）。")
+    st.subheader("导出 Markdown 报告")
+    st.caption("报告包含原始交易数据和评论，不包含 K 线数据。")
     report = markdown_io.export_markdown(TRADES_CSV, load_comments(), ROOT)
     st.download_button(
         "下载 report.md",
@@ -559,9 +542,7 @@ def summary_page(trades: pd.DataFrame):
     )
 
 
-# ───────────────────────────────────────────────
 # 交易详情页
-# ───────────────────────────────────────────────
 def detail_page(trades: pd.DataFrame):
     ids = trades["trade_id"].tolist()
     cur = int(st.session_state.get("selected_trade_id", ids[0]))
@@ -583,17 +564,17 @@ def detail_page(trades: pd.DataFrame):
             st.session_state.selected_trade_id = int(ids[idx + 1])
             st.rerun()
 
-    # 加载全量 K 线（拖动即可查看更多，无需设置前后根数）
+    # 加载全部 K 线
     df_5m = load_klines("5min")
     if df_5m.empty:
-        st.warning("⚠️ 该品种没有本地 K 线数据。")
-        st.markdown("到「🛠 数据」→「🚀 一键分析」或用 QuantData 从 TradingView 拉取（历史区间走回放模式）：")
+        st.warning("该品种没有本地 K 线数据。")
+        st.markdown("请到「数据管理」页拉取行情，或运行下面的命令：")
         st.code(
             f"python3 scripts/fetch_tv_data.py --symbol MES1! --timeframe 5m "
             f"--start {trade['entry_time'].date()} --end {trade['exit_time'].date()}"
         )
         st.markdown(
-            "或者用本地 1 分钟行情生成："
+            "也可以使用本地 1 分钟行情生成："
             "`python3 scripts/prepare_mes_intraday.py --input <1分钟行情.csv> --symbol MES`"
         )
         return
@@ -604,11 +585,11 @@ def detail_page(trades: pd.DataFrame):
     entry_in_range = entry_bar["low"].values[0] <= trade["entry_price"] <= entry_bar["high"].values[0]
     exit_in_range = exit_bar["low"].values[0] <= trade["exit_price"] <= exit_bar["high"].values[0]
     if not (entry_in_range and exit_in_range):
-        st.warning("⚠️ 交易价格与历史 K 线不完全匹配，标注位置可能与真实成交价有偏差。")
+        st.warning("交易价格与历史 K 线不完全匹配，标注位置可能有偏差。")
 
     # K 线图
     st.subheader("K 线图")
-    st.caption("拖动图表查看 K 线：向左拖看出场后，向右拖看进场前；滚轮缩放。")
+    st.caption("拖动查看 K 线，滚轮缩放。")
     df_15m = load_klines("15min")
     df_60m = load_klines("60min")
 
@@ -647,13 +628,13 @@ def detail_page(trades: pd.DataFrame):
     st.write(f"**进场时间：** {trade['entry_time']}")
     st.write(f"**出场时间：** {trade['exit_time']}")
 
-    # 复盘评论
+    # 评论
     st.divider()
-    st.subheader("📝 复盘评论")
+    st.subheader("复盘评论")
 
     trade_comments = [c for c in load_comments() if c.get("trade_id") == selected_id]
     if not trade_comments:
-        st.caption("还没有评论，写下你的复盘心得吧。")
+        st.caption("暂无评论。")
     for c in reversed(trade_comments):
         with st.container(border=True):
             st.markdown(f"*{c.get('created_at', '')}*")
@@ -671,9 +652,9 @@ def detail_page(trades: pd.DataFrame):
                 if img_path and Path(img_path).exists():
                     st.image(str(img_path), width=460)
 
-    # 评论输入（原生表单，支持多图）
+    # 评论输入
     with st.form("comment_form", clear_on_submit=True):
-        text = st.text_area("写评论…", key="comment_text", height=120, placeholder="例如：这里进场偏早，应该等二次确认…")
+        text = st.text_area("评论内容", key="comment_text", height=120, placeholder="例如：进场偏早，等待二次确认。")
         images = st.file_uploader(
             "贴图（可多张，按顺序追加在文字后）",
             type=["png", "jpg", "jpeg", "gif", "webp"],
@@ -698,11 +679,9 @@ def detail_page(trades: pd.DataFrame):
             st.rerun()
 
 
-# ───────────────────────────────────────────────
 # 主入口
-# ───────────────────────────────────────────────
 def main():
-    # session state 默认值
+    # 初始化状态
     settings = load_settings()
     if "page" not in st.session_state:
         st.session_state.page = "summary"
@@ -715,15 +694,15 @@ def main():
     if "ind_instances" not in st.session_state:
         st.session_state.ind_instances = settings.get("ind_instances", [])
 
-    # 注入主题 CSS；非交易页隐藏侧边栏
+    # 注入主题样式；非交易页隐藏侧边栏
     st.markdown(_CSS, unsafe_allow_html=True)
     if st.session_state.page != "detail":
         st.markdown("<style>[data-testid='stSidebar'] { display: none; }</style>", unsafe_allow_html=True)
 
-    # 顶部应用栏
+    # 顶部导航
     bar = st.columns([4, 1, 1, 1, 1, 1], vertical_alignment="center")
     with bar[0]:
-        st.markdown("### 📈 复盘分析")
+        st.markdown("### 复盘分析")
     for i, (page, label) in enumerate([("summary", "总结"), ("detail", "交易"), ("data", "数据")]):
         with bar[1 + i]:
             if st.button(label, width="stretch", type="primary" if st.session_state.page == page else "secondary"):
@@ -745,13 +724,13 @@ def main():
         data_page()
     elif st.session_state.page == "detail":
         if trades is None or trades.empty:
-            st.info("还没有交易数据，请先在「🛠 数据」页上传回放交易 CSV。")
+            st.info("还没有交易数据，请先到「数据」页上传回放交易 CSV。")
             data_page()
         else:
             detail_page(trades)
     else:
         if trades is None or trades.empty:
-            st.info("还没有交易数据，请先在「🛠 数据」页上传回放交易 CSV。")
+            st.info("还没有交易数据，请先到「数据」页上传回放交易 CSV。")
             data_page()
         else:
             summary_page(trades)

@@ -1,6 +1,6 @@
-"""生成一份示例 MES 1 分钟行情 + 示例回放交易，用于开箱即用地体验复盘面板。
+"""生成示例 MES 1 分钟行情和回放交易记录。
 
-生成文件（提交到仓库，别人 clone 下来即可用）：
+生成文件：
 - sample_data/sample_1min.csv   1 分钟 K 线
 - sample_data/sample_trades.csv 回放交易记录
 """

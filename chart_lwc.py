@@ -1,4 +1,4 @@
-"""使用 TradingView Lightweight Charts 渲染 K 线图与指标，通过 streamlit 嵌入。"""
+"""生成嵌入 Streamlit 的 Lightweight Charts K 线图。"""
 from __future__ import annotations
 
 import json
@@ -24,7 +24,7 @@ def render_chart(
     overlays: list[dict] | None = None,
     panes: list[dict] | None = None,
 ) -> str:
-    """生成包含 Lightweight Charts 的 HTML。df 传入全量数据，图表自动居中到这笔交易。"""
+    """生成图表 HTML，并将视图定位到当前交易。"""
     overlays = overlays or []
     panes = panes or []
     df = df.copy().sort_values("datetime").reset_index(drop=True)
