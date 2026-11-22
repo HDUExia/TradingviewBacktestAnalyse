@@ -10,7 +10,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent
 QD_SRC = ROOT / "vendor" / "quantdata" / "src"
 
-# TradingView 周期 -> TBA 的周期目录名
+# TradingView 周期对应的目录名
 TIMEFRAME_TO_FREQ = {
     "1m": "1min",
     "5m": "5min",

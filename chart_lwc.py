@@ -288,7 +288,7 @@ def render_chart(
       }}
     }});
 
-    // ==================== 副图 ====================
+    // 副图
     const panes = {json.dumps(panes_js)};
     const subCharts = [];
     panes.forEach((p) => {{
@@ -328,7 +328,7 @@ def render_chart(
       }});
     }}
 
-    // ==================== 拖动平移 ====================
+    // 拖动和缩放
     let isDragging = false;
     let startX = 0, startY = 0, lastX = 0, lastY = 0;
     let dragMode = null;

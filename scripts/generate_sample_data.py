@@ -26,7 +26,7 @@ def generate_bars() -> pd.DataFrame:
         t = day.replace(hour=0, minute=0)
         end = day.replace(hour=23, minute=55)
         while t <= end:
-            # 跳过每日 22:00-22:59 维护停盘，模拟 CME 的每日维护（其余为完整 ETH 盘）
+            # 跳过 CME 每日维护时段
             if not (22 <= t.hour < 23):
                 price = max(5000.0, price + rng.normal(0, 0.8))
                 open_ = price
