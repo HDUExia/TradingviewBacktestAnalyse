@@ -21,7 +21,7 @@ FREQS = {
 
 
 def load_1min(input_path: Path, symbol: str) -> pd.DataFrame:
-    print(f"Loading 1min data from {input_path} ...")
+    print(f"读取 1 分钟行情：{input_path}")
     df = pd.read_csv(input_path)
     df = df.rename(columns={
         "DateTime": "date",
@@ -58,30 +58,30 @@ def write_csv(df: pd.DataFrame, freq: str, symbol: str, csv_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"{symbol}.csv"
     fill_session_gaps(df).to_csv(out, index=False)
-    print(f"  {freq}: {len(df)} rows -> {out}")
-    print(f"      range: {df['date'].min()} ~ {df['date'].max()}")
+    print(f"  {freq}：{len(df)} 行，写入 {out}")
+    print(f"      时间范围：{df['date'].min()} ~ {df['date'].max()}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="1 分钟 CSV → 5/15/60 分钟 CSV")
+    parser = argparse.ArgumentParser(description="把 1 分钟 CSV 转换为 5、15、60 分钟 CSV")
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT, help="1 分钟 CSV 路径")
-    parser.add_argument("--symbol", default=DEFAULT_SYMBOL, help="symbol / 文件名前缀")
+    parser.add_argument("--symbol", default=DEFAULT_SYMBOL, help="品种或文件名前缀")
     parser.add_argument("--csv-dir", type=Path, default=DEFAULT_CSV_DIR, help="CSV 输出目录")
     args = parser.parse_args()
 
     if not args.input.exists():
-        print(f"[ERROR] Input file not found: {args.input}", file=sys.stderr)
+        print(f"找不到输入文件：{args.input}", file=sys.stderr)
         sys.exit(1)
 
     df_1m = load_1min(args.input, args.symbol)
-    print(f"Loaded {len(df_1m)} 1m bars")
+    print(f"已读取 {len(df_1m)} 根 1 分钟 K 线")
 
     for freq, rule in FREQS.items():
-        print(f"\nProcessing {freq} ...")
+        print(f"\n处理 {freq} 数据")
         df_freq = resample(df_1m, rule, args.symbol)
         write_csv(df_freq, freq, args.symbol, args.csv_dir)
 
-    print("\nDone. 5/15/60 分钟 CSV ready.")
+    print("\n5、15、60 分钟 CSV 已生成。")
 
 
 if __name__ == "__main__":

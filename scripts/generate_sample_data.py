@@ -70,7 +70,15 @@ def generate_trades(bars: pd.DataFrame) -> pd.DataFrame:
 
     rows = []
     cumulative = 0.0
-    for trade_id, (entry_type, exit_type, direction, entry_t, exit_t, entry_sig, exit_sig) in enumerate(specs, start=1):
+    for trade_id, (
+        entry_type,
+        exit_type,
+        direction,
+        entry_t,
+        exit_t,
+        entry_sig,
+        exit_sig,
+    ) in enumerate(specs, start=1):
         entry_dt = datetime.strptime(entry_t, "%Y-%m-%d %H:%M")
         exit_dt = datetime.strptime(exit_t, "%Y-%m-%d %H:%M")
         entry = _close_at(bars, entry_t)
@@ -141,11 +149,11 @@ def main() -> None:
 
     bars = generate_bars()
     bars.to_csv(OUT_DIR / "sample_1min.csv", index=False)
-    print(f"1 分钟行情 -> {OUT_DIR / 'sample_1min.csv'} ({len(bars)} 根)")
+    print(f"1 分钟行情：{len(bars)} 根，写入 {OUT_DIR / 'sample_1min.csv'}")
 
     trades = generate_trades(bars)
     trades.to_csv(OUT_DIR / "sample_trades.csv", index=False, encoding="utf-8-sig")
-    print(f"示例交易   -> {OUT_DIR / 'sample_trades.csv'} ({len(trades)} 条记录)")
+    print(f"示例交易：{len(trades)} 条，写入 {OUT_DIR / 'sample_trades.csv'}")
 
 
 if __name__ == "__main__":

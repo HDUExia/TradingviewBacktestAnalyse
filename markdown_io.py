@@ -1,11 +1,4 @@
-"""Markdown 报告导入导出。
-
-格式约定：
-- K 线数据不放进 Markdown（体积大，且可由本地 CSV / TradingView 重新生成）。
-- 原始交易数据以带标记的 ```csv 代码块嵌入。
-- 评论以 `<!-- TBA_COMMENT_BEGIN {...} -->` ... `<!-- TBA_COMMENT_END -->` 包裹，
-  图片用 `![图片](相对路径)` 引用（相对仓库根目录）。
-"""
+"""交易数据和评论的 Markdown 导入导出。"""
 from __future__ import annotations
 
 import io

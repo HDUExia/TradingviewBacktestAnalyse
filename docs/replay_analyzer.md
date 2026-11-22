@@ -35,8 +35,8 @@ data/csv_intraday/
 
 行情文件生成方式：
 
-- 上传 1 分钟行情 → `scripts/prepare_mes_intraday.py` 重采样为 5/15/60 分钟；
-- 或通过 QuantData 从 TradingView 拉取（`scripts/fetch_tv_data.py`，历史区间走回放模式）。
+- 上传 1 分钟行情，由 `scripts/prepare_mes_intraday.py` 重采样为 5、15、60 分钟；
+- 使用 QuantData 从 TradingView 获取行情，命令行脚本为 `scripts/fetch_tv_data.py`。
 
 ## 价格不匹配
 

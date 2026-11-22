@@ -55,8 +55,20 @@ def parse(input_path: Path = INPUT, output_path: Path = OUTPUT) -> int:
     trades_df = pd.DataFrame(trades).sort_values("entry_time").reset_index(drop=True)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     trades_df.to_csv(output_path, index=False)
-    print(f"Parsed {len(trades_df)} trades -> {output_path}")
-    print(trades_df[["trade_id", "direction", "entry_time", "exit_time", "pnl_usd", "return_pct", "duration_bars"]].head())
+    print(f"已解析 {len(trades_df)} 笔交易，输出到 {output_path}")
+    print(
+        trades_df[
+            [
+                "trade_id",
+                "direction",
+                "entry_time",
+                "exit_time",
+                "pnl_usd",
+                "return_pct",
+                "duration_bars",
+            ]
+        ].head()
+    )
     return len(trades_df)
 
 

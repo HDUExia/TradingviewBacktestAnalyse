@@ -8,7 +8,7 @@ import io
 import json
 import sys
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
 
 import numpy as np
@@ -129,7 +129,6 @@ def compute_metrics(trades: pd.DataFrame) -> dict:
     profit_factor = abs(avg_win / avg_loss) if avg_loss != 0 else np.inf
 
     equity = (1 + trades["return_pct"] / 100).cumprod()
-    total_return = equity.iloc[-1] - 1 if len(equity) > 0 else 0
     peak = equity.cummax()
     drawdown = (equity - peak) / peak
     max_dd = drawdown.min()
@@ -283,7 +282,7 @@ def data_page():
     else:
         s1.warning("交易记录：无")
     if (CSV_DIR / "5min").exists():
-        s2.success("行情数据：已有 5/15/60 分钟")
+        s2.success("行情数据：已有 5、15、60 分钟")
     else:
         s2.warning("行情数据：无")
 
@@ -370,7 +369,7 @@ def data_page():
             "可参考 `sample_data/sample_1min.csv`。"
         )
         up1 = st.file_uploader("选择 1 分钟 CSV", type=["csv"], key="kline_upload")
-        if up1 is not None and st.button("生成 5/15/60 分钟数据", key="btn_prep"):
+        if up1 is not None and st.button("生成 5、15、60 分钟数据", key="btn_prep"):
             path = save_upload(up1, "uploaded_1min.csv")
             try:
                 prepare_intraday(path, "MES", CSV_DIR)
@@ -391,10 +390,9 @@ def _trade_table_sidebar(trades: pd.DataFrame | None):
     current = int(st.session_state.get("selected_trade_id", trades.iloc[0]["trade_id"]))
     for _, row in trades.iterrows():
         tid = int(row["trade_id"])
-        icon = "+" if row["pnl_usd"] > 0 else "-"
         direction_cn = "多" if row["direction"] == "long" else "空"
-        sign = "+" if row["pnl_usd"] > 0 else ""
-        label = f"{icon} #{tid} {direction_cn} {sign}${row['pnl_usd']:.2f}"
+        result = "盈" if row["pnl_usd"] > 0 else "亏"
+        label = f"#{tid} {direction_cn} {result} ${row['pnl_usd']:.2f}"
         btn_type = "primary" if tid == current else "secondary"
         if st.sidebar.button(label, key=f"trade_btn_{tid}", width="stretch", type=btn_type):
             st.session_state.selected_trade_id = tid
@@ -467,9 +465,23 @@ def _indicators_ui():
             params = {}
             for pname, pval in inst["params"].items():
                 if pname in ("length", "fast", "slow", "signal"):
-                    params[pname] = int(st.number_input(pname, value=int(pval), min_value=1, step=1, key=f"indparam_{inst['id']}_{pname}"))
+                    params[pname] = int(
+                        st.number_input(
+                            pname,
+                            value=int(pval),
+                            min_value=1,
+                            step=1,
+                            key=f"indparam_{inst['id']}_{pname}",
+                        )
+                    )
                 else:
-                    params[pname] = st.number_input(pname, value=float(pval), min_value=0.1, step=0.1, key=f"indparam_{inst['id']}_{pname}")
+                    params[pname] = st.number_input(
+                        pname,
+                        value=float(pval),
+                        min_value=0.1,
+                        step=0.1,
+                        key=f"indparam_{inst['id']}_{pname}",
+                    )
             inst["params"] = params
 
 
@@ -496,36 +508,120 @@ def summary_page(trades: pd.DataFrame):
     with col_left:
         st.subheader("权益曲线")
         equity = (1 + trades["return_pct"] / 100).cumprod()
-        fig = go.Figure(go.Scatter(x=trades["exit_time"], y=equity, mode="lines", line=dict(color="#26a69a", width=2), fill="tozeroy", fillcolor="rgba(38, 166, 154, 0.1)"))
-        fig.update_layout(height=300, margin=dict(l=20, r=20, t=30, b=20), paper_bgcolor="#131722", plot_bgcolor="#131722", font_color="#d1d4dc", xaxis_gridcolor="#1e222d", yaxis_gridcolor="#1e222d")
+        fig = go.Figure(
+            go.Scatter(
+                x=trades["exit_time"],
+                y=equity,
+                mode="lines",
+                line=dict(color="#26a69a", width=2),
+                fill="tozeroy",
+                fillcolor="rgba(38, 166, 154, 0.1)",
+            )
+        )
+        fig.update_layout(
+            height=300,
+            margin=dict(l=20, r=20, t=30, b=20),
+            paper_bgcolor="#131722",
+            plot_bgcolor="#131722",
+            font_color="#d1d4dc",
+            xaxis_gridcolor="#1e222d",
+            yaxis_gridcolor="#1e222d",
+        )
         st.plotly_chart(fig, use_container_width=True, key="equity_curve")
 
     with col_right:
         st.subheader("盈亏分布")
-        fig = px.histogram(trades, x="pnl_usd", nbins=20, color="win", color_discrete_map={True: "#26a69a", False: "#ef5350"})
-        fig.update_layout(height=300, margin=dict(l=20, r=20, t=30, b=20), paper_bgcolor="#131722", plot_bgcolor="#131722", font_color="#d1d4dc", xaxis_gridcolor="#1e222d", yaxis_gridcolor="#1e222d", showlegend=False)
+        fig = px.histogram(
+            trades,
+            x="pnl_usd",
+            nbins=20,
+            color="win",
+            color_discrete_map={True: "#26a69a", False: "#ef5350"},
+        )
+        fig.update_layout(
+            height=300,
+            margin=dict(l=20, r=20, t=30, b=20),
+            paper_bgcolor="#131722",
+            plot_bgcolor="#131722",
+            font_color="#d1d4dc",
+            xaxis_gridcolor="#1e222d",
+            yaxis_gridcolor="#1e222d",
+            showlegend=False,
+        )
         st.plotly_chart(fig, use_container_width=True, key="pnl_hist")
 
     col_left2, col_right2 = st.columns(2)
 
     with col_left2:
         st.subheader("时段胜率")
-        session_stats = trades.groupby("session").agg(win_rate=("win", "mean"), count=("win", "size")).reset_index()
-        fig = go.Figure(go.Bar(x=session_stats["session"], y=session_stats["win_rate"]*100, marker_color=["#26a69a" if v >= 0.5 else "#ef5350" for v in session_stats["win_rate"]], text=session_stats["count"], textposition="auto"))
-        fig.update_layout(height=300, margin=dict(l=20, r=20, t=30, b=20), paper_bgcolor="#131722", plot_bgcolor="#131722", font_color="#d1d4dc", xaxis_gridcolor="#1e222d", yaxis_gridcolor="#1e222d", yaxis=dict(ticksuffix="%"))
+        session_stats = (
+            trades.groupby("session")
+            .agg(win_rate=("win", "mean"), count=("win", "size"))
+            .reset_index()
+        )
+        fig = go.Figure(
+            go.Bar(
+                x=session_stats["session"],
+                y=session_stats["win_rate"] * 100,
+                marker_color=[
+                    "#26a69a" if v >= 0.5 else "#ef5350"
+                    for v in session_stats["win_rate"]
+                ],
+                text=session_stats["count"],
+                textposition="auto",
+            )
+        )
+        fig.update_layout(
+            height=300,
+            margin=dict(l=20, r=20, t=30, b=20),
+            paper_bgcolor="#131722",
+            plot_bgcolor="#131722",
+            font_color="#d1d4dc",
+            xaxis_gridcolor="#1e222d",
+            yaxis_gridcolor="#1e222d",
+            yaxis=dict(ticksuffix="%"),
+        )
         st.plotly_chart(fig, use_container_width=True, key="session_winrate")
 
     with col_right2:
         st.subheader("MAE/MFE 散点")
-        fig = px.scatter(trades, x="mae_usd", y="mfe_usd", color="win", color_discrete_map={True: "#26a69a", False: "#ef5350"}, hover_data=["trade_id"])
+        fig = px.scatter(
+            trades,
+            x="mae_usd",
+            y="mfe_usd",
+            color="win",
+            color_discrete_map={True: "#26a69a", False: "#ef5350"},
+            hover_data=["trade_id"],
+        )
         fig.add_hline(y=0, line_dash="dash", line_color="gray")
         fig.add_vline(x=0, line_dash="dash", line_color="gray")
-        fig.update_layout(height=300, margin=dict(l=20, r=20, t=30, b=20), paper_bgcolor="#131722", plot_bgcolor="#131722", font_color="#d1d4dc", xaxis_gridcolor="#1e222d", yaxis_gridcolor="#1e222d")
+        fig.update_layout(
+            height=300,
+            margin=dict(l=20, r=20, t=30, b=20),
+            paper_bgcolor="#131722",
+            plot_bgcolor="#131722",
+            font_color="#d1d4dc",
+            xaxis_gridcolor="#1e222d",
+            yaxis_gridcolor="#1e222d",
+        )
         st.plotly_chart(fig, use_container_width=True, key="mae_mfe")
 
     st.divider()
     st.subheader("交易明细")
-    display_df = trades[["trade_id", "direction", "entry_time", "exit_time", "pnl_usd", "return_pct", "duration_minutes", "mfe_usd", "mae_usd", "session"]].copy()
+    display_df = trades[
+        [
+            "trade_id",
+            "direction",
+            "entry_time",
+            "exit_time",
+            "pnl_usd",
+            "return_pct",
+            "duration_minutes",
+            "mfe_usd",
+            "mae_usd",
+            "session",
+        ]
+    ].copy()
     display_df["结果"] = display_df["pnl_usd"].apply(lambda x: "盈" if x > 0 else "亏")
     st.dataframe(display_df, width="stretch")
 

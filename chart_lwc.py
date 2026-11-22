@@ -130,7 +130,8 @@ def render_chart(
 
     pane_divs = "".join(
         f'<div id="pane-{p["key"]}" style="width:100%;height:120px;position:relative;border-top:1px solid #1e222d;">'
-        f'<span style="position:absolute;top:4px;left:8px;font-size:11px;color:#8a8f98;z-index:5;">{p["name"]}</span></div>'
+        f'<span style="position:absolute;top:4px;left:8px;font-size:11px;'
+        f'color:#8a8f98;z-index:5;">{p["name"]}</span></div>'
         for p in panes
     )
 
@@ -143,11 +144,53 @@ def render_chart(
   <meta charset="UTF-8">
   <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
   <style>
-    body {{ margin: 0; padding: 0; background: #131722; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }}
+    body {{
+      margin: 0;
+      padding: 0;
+      background: #131722;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }}
     #container {{ width: 100%; height: {height}px; position: relative; }}
-    #title {{ position: absolute; top: 6px; left: 10px; font-size: 13px; color: #d1d4dc; z-index: 10; background: rgba(19, 23, 34, 0.85); padding: 3px 8px; border-radius: 4px; pointer-events: none; border: 1px solid #2a2e39; }}
-    #legend {{ position: absolute; top: 6px; right: 60px; font-size: 12px; color: #d1d4dc; z-index: 10; background: rgba(19, 23, 34, 0.85); padding: 3px 8px; border-radius: 4px; pointer-events: none; border: 1px solid #2a2e39; font-variant-numeric: tabular-nums; }}
-    #tooltip {{ position: absolute; display: none; z-index: 20; background: rgba(19, 23, 34, 0.96); color: #d1d4dc; padding: 4px 8px; border-radius: 4px; font-size: 12px; pointer-events: none; border: 1px solid #2a2e39; white-space: nowrap; }}
+    #title {{
+      position: absolute;
+      top: 6px;
+      left: 10px;
+      font-size: 13px;
+      color: #d1d4dc;
+      z-index: 10;
+      background: rgba(19, 23, 34, 0.85);
+      padding: 3px 8px;
+      border-radius: 4px;
+      pointer-events: none;
+      border: 1px solid #2a2e39;
+    }}
+    #legend {{
+      position: absolute;
+      top: 6px;
+      right: 60px;
+      font-size: 12px;
+      color: #d1d4dc;
+      z-index: 10;
+      background: rgba(19, 23, 34, 0.85);
+      padding: 3px 8px;
+      border-radius: 4px;
+      pointer-events: none;
+      border: 1px solid #2a2e39;
+      font-variant-numeric: tabular-nums;
+    }}
+    #tooltip {{
+      position: absolute;
+      display: none;
+      z-index: 20;
+      background: rgba(19, 23, 34, 0.96);
+      color: #d1d4dc;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      pointer-events: none;
+      border: 1px solid #2a2e39;
+      white-space: nowrap;
+    }}
   </style>
 </head>
 <body>
@@ -164,7 +207,11 @@ def render_chart(
     const TZ = {json.dumps(tz)};
     const ENTRY_TS = {entry_ts};
     const EXIT_TS = {exit_ts};
-    const LINE_STYLES = {{ solid: LightweightCharts.LineStyle.Solid, dashed: LightweightCharts.LineStyle.Dashed, dotted: LightweightCharts.LineStyle.Dotted }};
+    const LINE_STYLES = {{
+      solid: LightweightCharts.LineStyle.Solid,
+      dashed: LightweightCharts.LineStyle.Dashed,
+      dotted: LightweightCharts.LineStyle.Dotted,
+    }};
 
     function fmtTZ(seconds) {{
       const d = new Date(seconds * 1000);
@@ -284,7 +331,9 @@ def render_chart(
         const c = data.close.toFixed(2);
         const v = volData ? Math.round(volData.value).toLocaleString() : '-';
         const color = data.close >= data.open ? '#26a69a' : '#ef5350';
-        legend.innerHTML = `<span style="color:${{color}}">O ${{o}} H ${{h}} L ${{l}} C ${{c}}</span> | Vol ${{v}} | ${{fmtTZ(param.time)}}`;
+        legend.innerHTML =
+          `<span style="color:${{color}}">O ${{o}} H ${{h}} L ${{l}} C ${{c}}</span>` +
+          ` | Vol ${{v}} | ${{fmtTZ(param.time)}}`;
       }}
     }});
 
@@ -297,7 +346,11 @@ def render_chart(
       const ch = LightweightCharts.createChart(el, {{
         width: el.clientWidth,
         height: 120,
-        layout: {{ background: {{ type: 'solid', color: '#131722' }}, textColor: '#d1d4dc', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }},
+        layout: {{
+          background: {{ type: 'solid', color: '#131722' }},
+          textColor: '#d1d4dc',
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        }},
         grid: {{ vertLines: {{ color: '#1e222d' }}, horzLines: {{ color: '#1e222d' }} }},
         rightPriceScale: {{ borderColor: '#2a2e39', scaleMargins: {{ top: 0.15, bottom: 0.15 }} }},
         leftPriceScale: {{ visible: false }},

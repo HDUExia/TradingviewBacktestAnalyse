@@ -1,19 +1,4 @@
-"""技术指标计算与注册表。
-
-指标函数接收行情 DataFrame 和参数，返回一个或多个 series。新增指标时，
-实现计算函数并在 ``INDICATORS`` 中注册。
-
-series 结构：
-    key   标识
-    name  显示名
-    pane  "main" 或子图名
-    kind  "line" | "histogram"
-    values 与 df 行对齐的数值列表，可包含 None
-    color  颜色
-    width  线宽
-    style  solid | dashed | dotted
-    colors 可选，histogram 逐点颜色
-"""
+"""技术指标计算和注册表。指标函数接收行情数据和参数，返回图表序列。"""
 import pandas as pd
 
 
@@ -46,7 +31,18 @@ def instance_label(iid, params):
     return f"{short}({vals})"
 
 
-def _series(key, name, values, pane="main", kind="line", color="#3b82f6", width=2, style="solid", colors=None, scale="price"):
+def _series(
+    key,
+    name,
+    values,
+    pane="main",
+    kind="line",
+    color="#3b82f6",
+    width=2,
+    style="solid",
+    colors=None,
+    scale="price",
+):
     out = {
         "key": key,
         "name": name,
